@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Morning Brief</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap');
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --gold:#C8A96E; --gold-light:#e8d5a8;
+    --bg:#F0EDE8; --surface:#FAFAF8;
+    --border:rgba(0,0,0,0.08);
+    --text:#1a1a1a; --text2:#666; --text3:#999;
+    --green:#2E7D50; --red:#B03A2E;
+    --sans:'DM Sans',system-ui,sans-serif;
+    --serif:'EB Garamond',Georgia,serif;
+  }
+  body { font-family:var(--sans); background:var(--bg); color:var(--text); min-height:100vh; display:flex; flex-direction:column; }
+
+  .topbar { display:flex; align-items:center; justify-content:space-between; padding:15px 30px; background:var(--surface); border-bottom:1px solid var(--border); }
+  .wordmark { font-family:var(--serif); font-size:19px; font-weight:600; }
+  .topbar-right { display:flex; align-items:center; gap:18px; }
+  .top-date { font-size:11px; font-weight:300; color:var(--text3); letter-spacing:0.07em; }
+  .rdot { width:6px; height:6px; border-radius:50%; background:var(--green); display:inline-block; margin-right:4px; }
+  .rlabel { font-size:10px; color:var(--text3); }
+
+  .main { display:grid; grid-template-columns:1fr 1fr; flex:1; }
+
+  .arch-panel { background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; min-height:calc(100vh - 54px); overflow-y:auto; }
+  .arch-inner { padding:32px 36px 36px; display:flex; flex-direction:column; flex:1; }
+  .arch-eyebrow { font-size:9px; font-weight:500; letter-spacing:0.18em; text-transform:uppercase; color:var(--gold); margin-bottom:6px; }
+  .arch-rule { width:40px; height:2px; background:linear-gradient(90deg,var(--gold),var(--gold-light)); border-radius:1px; margin-bottom:16px; }
+  .arch-building-name { font-family:var(--serif); font-size:28px; font-weight:600; line-height:1.1; color:var(--text); margin-bottom:6px; }
+  .arch-meta { font-size:11px; font-weight:300; color:var(--text3); letter-spacing:0.03em; margin-bottom:20px; }
+  .arch-meta span { margin:0 6px; color:var(--border); }
+  .arch-images { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-bottom:22px; }
+  .arch-img-wrap { display:flex; flex-direction:column; gap:5px; }
+  .arch-img-wrap img { width:100%; height:140px; object-fit:cover; border-radius:2px; background:var(--bg); display:block; }
+  .arch-img-caption { font-size:9px; color:var(--text3); text-align:center; line-height:1.3; }
+  .arch-body { font-family:var(--serif); font-size:16px; line-height:1.8; color:#333; margin-bottom:20px; flex:1; }
+  .arch-detail-label { font-size:9px; font-weight:600; color:var(--gold); letter-spacing:0.14em; text-transform:uppercase; margin-bottom:6px; }
+  .arch-detail-text { font-family:var(--serif); font-style:italic; font-size:14.5px; line-height:1.7; color:#666; margin-bottom:24px; }
+  .arch-footer { display:flex; align-items:center; justify-content:space-between; padding-top:16px; border-top:1px solid var(--border); }
+  .arch-footer-label { font-size:10px; color:var(--text3); letter-spacing:0.06em; text-transform:uppercase; }
+  .arch-maps-link { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:500; color:var(--gold); text-decoration:none; letter-spacing:0.02em; border:1.5px solid var(--gold-light); padding:6px 14px; border-radius:20px; }
+  .arch-maps-link:hover { background:var(--gold); color:#fff; border-color:var(--gold); }
+  .arch-placeholder { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:48px; text-align:center; gap:14px; }
+  .arch-placeholder-title { font-family:var(--serif); font-size:26px; font-weight:600; line-height:1.15; color:var(--text); }
+  .arch-placeholder-sub { font-size:12px; font-weight:300; color:var(--text3); max-width:260px; line-height:1.75; }
+  .arch-loading { flex:1; display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--text3); font-style:italic; }
+
+  .right-panel { display:flex; flex-direction:column; overflow-y:auto; font-size:1.15em; }
+  .section { padding:16px 24px; border-bottom:1px solid var(--border); }
+  .sec-label { font-size:10px; font-weight:500; letter-spacing:0.15em; text-transform:uppercase; color:var(--text3); margin-bottom:11px; }
+
+  .eq-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; }
+  .eq-card { background:var(--surface); border:1px solid var(--border); border-radius:5px; padding:9px 10px; }
+  .eq-sym { font-size:10px; font-weight:500; letter-spacing:0.07em; color:var(--text3); margin-bottom:3px; }
+  .eq-price { font-size:17px; font-variant-numeric:tabular-nums; line-height:1; margin-bottom:5px; }
+  .eq-changes { display:flex; gap:4px; flex-wrap:wrap; }
+  .badge { font-size:11px; font-variant-numeric:tabular-nums; border-radius:3px; padding:2px 5px; display:inline-flex; align-items:center; gap:2px; }
+  .badge-label { font-size:9px; opacity:0.65; margin-right:1px; }
+  .up { color:var(--green); background:rgba(46,125,80,0.08); }
+  .down { color:var(--red); background:rgba(176,58,46,0.08); }
+
+  .two-col { display:grid; grid-template-columns:1fr 1fr; }
+  .two-col .section:first-child { border-right:1px solid var(--border); }
+
+  /* CRYPTO — no background on change cells */
+  .crypto-tbl { width:100%; border-collapse:collapse; }
+  .crypto-tbl th { font-size:9.5px; font-weight:500; letter-spacing:0.08em; color:var(--text3); text-transform:uppercase; padding:0 0 7px; text-align:right; }
+  .crypto-tbl th:first-child { text-align:left; }
+  .crypto-tbl td { font-size:12.5px; font-variant-numeric:tabular-nums; padding:5px 0; border-top:1px solid var(--border); text-align:right; vertical-align:middle; }
+  .crypto-tbl td:first-child { text-align:left; font-size:12px; font-weight:500; }
+  .cprice { font-weight:500; }
+  .pct-up   { color:var(--green); }
+  .pct-down { color:var(--red); }
+
+  /* RATES */
+  .rate-rows { display:flex; flex-direction:column; gap:6px; }
+  .rate-row { background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:8px 10px; }
+  .rate-top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px; }
+  .rate-name { font-size:12px; color:var(--text2); }
+  .rate-val { font-size:16px; font-weight:500; font-variant-numeric:tabular-nums; }
+  .rate-changes { display:flex; gap:4px; }
+  .rate-asof { font-size:10.5px; color:var(--text3); margin-top:8px; }
+
+  /* NEWS */
+  .news-section { padding:16px 24px; flex:1; }
+  .news-tabs { display:flex; gap:0; }
+  .headlines-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:11px; border-bottom:1px solid var(--border); padding-bottom:0; }
+  .headlines-header .sec-label { margin-bottom:0; padding-bottom:11px; }
+  .news-tab { font-size:13px; color:var(--text3); padding:5px 12px 8px; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; background:none; border-top:none; border-left:none; border-right:none; }
+  .news-tab.active { color:var(--text); border-bottom-color:var(--gold); font-weight:500; }
+  .news-feed { display:none; flex-direction:column; }
+  .news-feed.active { display:flex; }
+  .news-item { padding:9px 0; border-bottom:1px solid var(--border); text-decoration:none; display:block; }
+  .news-item:last-child { border-bottom:none; }
+  .news-hed { font-family:var(--serif); font-size:16px; color:var(--text); line-height:1.4; margin-bottom:2px; }
+  .news-meta { font-size:10.5px; color:var(--text3); }
+  .news-item:hover .news-hed { color:var(--gold); }
+  .news-ai-label { font-size:10px; color:var(--text3); letter-spacing:0.06em; text-transform:uppercase; margin-bottom:8px; }
+  .news-spinner { font-size:11px; color:var(--text3); font-style:italic; padding:6px 0; }
+
+
+  /* QUOTE BAR */
+  .quote-bar { background:var(--surface); border-bottom:1px solid var(--border); padding:13px 32px; display:flex; align-items:baseline; gap:14px; justify-content:center; text-align:center; }
+  .quote-text { font-family:var(--serif); font-size:15px; font-style:italic; color:var(--text2); line-height:1.5; flex:1; }
+  .quote-attr { font-size:10.5px; font-weight:500; color:var(--text3); letter-spacing:0.04em; white-space:nowrap; }
+  .loading { font-size:11px; color:var(--text3); font-style:italic; padding:6px 0; }
+  .err { font-size:11px; color:var(--red); padding:5px 0; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wordmark">Morning Brief</div>
+  <div class="topbar-right">
+    <span class="top-date" id="top-date"></span>
+    <span><span class="rdot"></span><span class="rlabel" id="rlabel">Loading…</span></span>
+  </div>
+</div>
+
+<div class="quote-bar"><span class="quote-text" id="quote-text">Loading…</span><span class="quote-attr" id="quote-attr"></span></div>
+<div class="main">
+  <div class="arch-panel">
+    <div id="arch-content" class="arch-inner">
+      <div class="arch-loading">Loading today's building…</div>
+    </div>
+  </div>
+
+  <div class="right-panel">
+    <div class="section">
+      <div class="sec-label">Equities</div>
+      <div class="eq-grid" id="eq-grid"><div class="loading">Loading…</div></div>
+    </div>
+
+    <div class="two-col">
+      <div class="section">
+        <div class="sec-label">Crypto</div>
+        <table class="crypto-tbl">
+          <thead><tr><th></th><th>1H</th><th>24H</th><th>30D</th><th>Price</th></tr></thead>
+          <tbody id="crypto-body"><tr><td colspan="5" class="loading">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="section">
+        <div class="sec-label">Rates</div>
+        <div class="rate-rows" id="rate-rows"><div class="loading">Loading…</div></div>
+      </div>
+    </div>
+
+    <div class="news-section">
+      <div class="headlines-header">
+        <div class="sec-label">Headlines</div>
+        <div class="news-tabs">
+          <button class="news-tab active" onclick="tab('cnbc')">CNBC</button>
+          <button class="news-tab" onclick="tab('bloomberg')">Bloomberg</button>
+          <button class="news-tab" onclick="tab('ft')">FT</button>
+        </div>
+      </div>
+      <div class="news-feed active" id="feed-cnbc"><div class="loading">Loading…</div></div>
+      <div class="news-feed" id="feed-bloomberg"><div class="loading">Loading…</div></div>
+      <div class="news-feed" id="feed-ft"><div class="loading">Loading…</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const TD_KEY   = '0f57d90c0f8042b3b526a66545daaa62';
+const SUPA_URL = 'https://daectsfxmldypacvammr.supabase.co/rest/v1';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRhZWN0c2Z4bWxkeXBhY3ZhbW1yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4MDAxNzAsImV4cCI6MjA2OTM3NjE3MH0.BFNaKN3X2Kr7YHe3KVHMsAWPXiZtxkJ-r0mFMrC1_9Q';
+const SH = { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}` };
+
+function fmtPrice(n) {
+  n = parseFloat(n);
+  if (n >= 1000) return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  if (n >= 1)    return n.toFixed(2);
+  return n.toFixed(4);
+}
+function badge(pct, label) {
+  pct = parseFloat(pct);
+  const cls = pct >= 0 ? 'up' : 'down', sign = pct >= 0 ? '+' : '';
+  return `<span class="badge ${cls}"><span class="badge-label">${label}</span>${sign}${pct.toFixed(2)}%</span>`;
+}
+function bpsBadge(curr, prev, label) {
+  const diff = (parseFloat(curr) - parseFloat(prev)) * 100;
+  const cls  = diff >= 0 ? 'up' : 'down', sign = diff >= 0 ? '+' : '';
+  return `<span class="badge ${cls}"><span class="badge-label">${label}</span>${sign}${diff.toFixed(1)}bps</span>`;
+}
+function pctCell(p) {
+  p = parseFloat(p);
+  const cls = p >= 0 ? 'pct-up' : 'pct-down', sign = p >= 0 ? '+' : '';
+  return `<span class="${cls}">${sign}${Math.abs(p).toFixed(2)}%</span>`;
+}
+
+function tick() {
+  const now = new Date();
+  document.getElementById('top-date').textContent = now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}).toUpperCase();
+}
+tick();
+
+// EQUITIES — single time_series batch (8 credits total, one request)
+async function loadEquities() {
+  const grid = document.getElementById('eq-grid');
+  try {
+    const syms = 'GOOGL,AMZN,AAPL,BRK.B,COIN,NVDA,QCOM,SPY';
+    const res  = await fetch(`https://api.twelvedata.com/time_series?symbol=${syms}&interval=1day&outputsize=31&apikey=${TD_KEY}`);
+    const data = await res.json();
+    if (data.code) throw new Error(data.message);
+    const order = ['GOOGL','AMZN','AAPL','BRK.B','COIN','NVDA','QCOM','SPY'];
+    grid.innerHTML = order.map(sym => {
+      const d = data[sym];
+      if (!d || d.status === 'error' || !d.values?.length)
+        return `<div class="eq-card"><div class="eq-sym">${sym}</div><div class="eq-price">—</div></div>`;
+      const vals   = d.values;
+      const price  = parseFloat(vals[0].close);
+      const prev   = parseFloat(vals[1]?.close ?? vals[0].close);
+      const old30  = parseFloat(vals[vals.length - 1].close);
+      const chg1d  = ((price - prev)  / prev)  * 100;
+      const chg30d = ((price - old30) / old30) * 100;
+      return `<div class="eq-card">
+        <div class="eq-sym">${sym}</div>
+        <div class="eq-price">$${fmtPrice(price)}</div>
+        <div class="eq-changes">${badge(chg1d,'1D')}${badge(chg30d,'30D')}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    grid.innerHTML = `<div class="err">Could not load equities.</div>`;
+  }
+}
+
+// CRYPTO — CoinGecko markets, no background on change cells
+async function loadCrypto() {
+  const tbody = document.getElementById('crypto-body');
+  const coins = [
+    {id:'bitcoin',sym:'BTC'},{id:'ethereum',sym:'ETH'},{id:'solana',sym:'SOL'},
+    {id:'dogecoin',sym:'DOGE'},{id:'hyperliquid',sym:'HYPE'}
+  ];
+  try {
+    const ids = coins.map(c=>c.id).join(',');
+    const res  = await fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&price_change_percentage=1h,24h,30d`);
+    const data = await res.json();
+    const map  = {};
+    data.forEach(c => { map[c.id] = c; });
+    tbody.innerHTML = coins.map(({id,sym}) => {
+      const c = map[id]; if (!c) return '';
+      const h1  = c.price_change_percentage_1h_in_currency  ?? 0;
+      const h24 = c.price_change_percentage_24h_in_currency ?? 0;
+      const d30 = c.price_change_percentage_30d_in_currency ?? 0;
+      return `<tr>
+        <td>${sym}</td>
+        <td>${pctCell(h1)}</td>
+        <td>${pctCell(h24)}</td>
+        <td>${pctCell(d30)}</td>
+        <td class="cprice">$${fmtPrice(c.current_price)}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="5" class="err">Could not load crypto.</td></tr>`;
+  }
+}
+
+// RATES — all from Pensford Supabase for accuracy
+// historical_treasury for 5Y/10Y, historical_floating for 1M Term SOFR
+async function loadRates() {
+  const rows = document.getElementById('rate-rows');
+  try {
+    const now    = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const ago30  = new Date(now); ago30.setDate(ago30.getDate() - 32);
+    const ago30Str = ago30.toISOString().split('T')[0];
+
+    const [r5today, r5ago, r10today, r10ago, sofrToday, sofrAgo] = await Promise.all([
+      fetch(`${SUPA_URL}/historical_treasury?select=reset_date,rate_value&rate_label=eq.US%205YR%20Treasury&reset_date=lte.${todayStr}&order=reset_date.desc&limit=2`, {headers:SH}).then(r=>r.json()),
+      fetch(`${SUPA_URL}/historical_treasury?select=reset_date,rate_value&rate_label=eq.US%205YR%20Treasury&reset_date=lte.${ago30Str}&order=reset_date.desc&limit=1`, {headers:SH}).then(r=>r.json()),
+      fetch(`${SUPA_URL}/historical_treasury?select=reset_date,rate_value&rate_label=eq.US%2010YR%20Treasury&reset_date=lte.${todayStr}&order=reset_date.desc&limit=2`, {headers:SH}).then(r=>r.json()),
+      fetch(`${SUPA_URL}/historical_treasury?select=reset_date,rate_value&rate_label=eq.US%2010YR%20Treasury&reset_date=lte.${ago30Str}&order=reset_date.desc&limit=1`, {headers:SH}).then(r=>r.json()),
+      fetch(`${SUPA_URL}/historical_floating?select=reset_date,rate_value&rate_label=eq.1M%20Term%20SOFR&reset_date=lte.${todayStr}&order=reset_date.desc&limit=2`, {headers:SH}).then(r=>r.json()),
+      fetch(`${SUPA_URL}/historical_floating?select=reset_date,rate_value&rate_label=eq.1M%20Term%20SOFR&reset_date=lte.${ago30Str}&order=reset_date.desc&limit=1`, {headers:SH}).then(r=>r.json())
+    ]);
+
+    const asOf = r5today[0]?.reset_date
+      ? new Date(r5today[0].reset_date + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})
+      : '';
+
+    const rateData = [
+      { label:'5Y Treasury',  val:r5today[0]?.rate_value,   prev1d:r5today[1]?.rate_value,   prev30:r5ago[0]?.rate_value },
+      { label:'10Y Treasury', val:r10today[0]?.rate_value,  prev1d:r10today[1]?.rate_value,  prev30:r10ago[0]?.rate_value },
+      { label:'1M Term SOFR', val:sofrToday[0]?.rate_value, prev1d:sofrToday[1]?.rate_value, prev30:sofrAgo[0]?.rate_value }
+    ];
+
+    rows.innerHTML = rateData.map(r => {
+      const v = r.val;
+      return `<div class="rate-row">
+        <div class="rate-top">
+          <span class="rate-name">${r.label}</span>
+          <span class="rate-val">${v != null ? v.toFixed(2)+'%' : '—'}</span>
+        </div>
+        <div class="rate-changes">
+          ${v != null && r.prev1d != null ? bpsBadge(v, r.prev1d, '1D')  : ''}
+          ${v != null && r.prev30 != null ? bpsBadge(v, r.prev30, '1MO') : ''}
+        </div>
+      </div>`;
+    }).join('') + `<div class="rate-asof">As of ${asOf} · via Pensford</div>`;
+
+  } catch(e) {
+    rows.innerHTML = `<div class="err">Could not load rates.</div>`;
+  }
+}
+
+// NEWS — Claude API picks top stories from multiple feeds per source
+const FEEDS = {
+  cnbc:      ['https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664',
+              'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=15839135'],
+  bloomberg: ['https://feeds.bloomberg.com/markets/news.rss',
+              'https://feeds.bloomberg.com/politics/news.rss',
+              'https://feeds.bloomberg.com/technology/news.rss'],
+  ft:        ['https://www.ft.com/rss/home/uk']
+};
+
+async function fetchFeedItems(urls) {
+  const all = await Promise.all(urls.map(url =>
+    fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&_=${Date.now()}`)
+      .then(r => r.json())
+      .then(d => d.status === 'ok' ? d.items : [])
+      .catch(() => [])
+  ));
+  return all.flat();
+}
+
+async function loadFeedWithAI(key) {
+  const el = document.getElementById(`feed-${key}`);
+  el.innerHTML = `<div class="news-spinner">Curating top stories…</div>`;
+  try {
+    const items = await fetchFeedItems(FEEDS[key]);
+    if (!items.length) throw new Error('no items');
+
+    // Build prompt for Claude to pick the 6 most significant stories
+    const headlines = items.slice(0, 30).map((item, i) =>
+      `${i+1}. ${item.title} [${item.pubDate?.slice(0,16) || ''}]`
+    ).join('\n');
+
+    const response = await fetch(NEWS_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ headlines })
+    });
+
+    const aiData = await response.json();
+    const indices = (aiData.indices || []).slice(0, 4);
+
+    // Map selected indices back to items
+    const selected = indices.length
+      ? indices.map(i => items[i - 1]).filter(Boolean)
+      : items.slice(0, 4);
+
+    el.innerHTML = selected.map(item => {
+      const ago = timeAgo(new Date(item.pubDate));
+      return `<a class="news-item" href="${item.link}" target="_blank" rel="noopener">
+        <div class="news-hed">${item.title}</div>
+        <div class="news-meta">${ago}</div>
+      </a>`;
+    }).join('');
+
+  } catch(e) {
+    // Fallback: just show most recent items
+    try {
+      const items = await fetchFeedItems(FEEDS[key]);
+      el.innerHTML = items.slice(0,4).map(item => {
+        const ago = timeAgo(new Date(item.pubDate));
+        return `<a class="news-item" href="${item.link}" target="_blank" rel="noopener">
+          <div class="news-hed">${item.title}</div>
+          <div class="news-meta">${ago}</div>
+        </a>`;
+      }).join('') || `<div class="err">Could not load feed.</div>`;
+    } catch(_) {
+      el.innerHTML = `<div class="err">Could not load feed.</div>`;
+    }
+  }
+}
+
+function timeAgo(d) {
+  const m = Math.floor((Date.now() - d) / 60000);
+  if (m < 60)   return `${m}m ago`;
+  if (m < 1440) return `${Math.floor(m/60)}h ago`;
+  return `${Math.floor(m/1440)}d ago`;
+}
+function tab(key) {
+  document.querySelectorAll('.news-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.news-feed').forEach(f => f.classList.remove('active'));
+  document.querySelector(`[onclick="tab('${key}')"]`).classList.add('active');
+  document.getElementById(`feed-${key}`).classList.add('active');
+}
+
+
+
+// DAILY QUOTE — fixed for the day, seeded by date, Claude API generates it
+const QUOTES = [
+  { text: "A leader is a dealer in hope.", attr: "Napoleon Bonaparte" },
+  { text: "Experience is the teacher of all things.", attr: "Julius Caesar" },
+  { text: "I am not an adventurer by choice but by fate.", attr: "Vincent van Gogh" },
+  { text: "If you deprive yourself of outsourcing and your competitors do not, you're putting yourself out of business.", attr: "Lee Kuan Yew" },
+  { text: "Simple can be harder than complex. You have to work hard to get your thinking clean to make it simple.", attr: "Steve Jobs" },
+  { text: "The secret of getting ahead is getting started.", attr: "Mark Twain" },
+  { text: "In the middle of difficulty lies opportunity.", attr: "Albert Einstein" },
+  { text: "It is not the strongest of the species that survive, but the one most responsive to change.", attr: "Charles Darwin" },
+  { text: "To improve is to change; to be perfect is to have changed often.", attr: "Winston Churchill" },
+  { text: "He who has a why to live can bear almost any how.", attr: "Friedrich Nietzsche" },
+  { text: "The impediment to action advances action. What stands in the way becomes the way.", attr: "Marcus Aurelius" },
+  { text: "Waste no more time arguing about what a good man should be. Be one.", attr: "Marcus Aurelius" },
+  { text: "It always seems impossible until it's done.", attr: "Nelson Mandela" },
+  { text: "A man who has committed a mistake and doesn't correct it is committing another mistake.", attr: "Confucius" },
+  { text: "The measure of intelligence is the ability to change.", attr: "Albert Einstein" },
+  { text: "If you want to go fast, go alone. If you want to go far, go together.", attr: "African Proverb" },
+  { text: "Vision without execution is hallucination.", attr: "Thomas Edison" },
+  { text: "The quality of a person's life is in direct proportion to their commitment to excellence.", attr: "Vince Lombardi" },
+  { text: "An investment in knowledge pays the best interest.", attr: "Benjamin Franklin" },
+  { text: "The only way to do great work is to love what you do.", attr: "Steve Jobs" },
+  { text: "Do not wait to strike till the iron is hot, but make it hot by striking.", attr: "William Butler Yeats" },
+  { text: "Real knowledge is to know the extent of one's ignorance.", attr: "Confucius" },
+  { text: "Success is not final, failure is not fatal: it is the courage to continue that counts.", attr: "Winston Churchill" },
+  { text: "The man who moves a mountain begins by carrying away small stones.", attr: "Confucius" },
+  { text: "Battles are won by slaughter and maneuver. The greater the general, the more he contributes in maneuver, the less he demands in slaughter.", attr: "Winston Churchill" },
+  { text: "Nothing in life is to be feared, it is only to be understood.", attr: "Marie Curie" },
+  { text: "The true sign of intelligence is not knowledge but imagination.", attr: "Albert Einstein" },
+  { text: "Good judgment comes from experience, and experience comes from bad judgment.", attr: "Rita Mae Brown" },
+  { text: "Boards don't hit back.", attr: "Bruce Lee" },
+  { text: "If you know the enemy and know yourself, you need not fear the result of a hundred battles.", attr: "Sun Tzu" }
+];
+
+function loadQuote() {
+  const now   = new Date();
+  const seed  = now.getFullYear() * 10000 + (now.getMonth()+1) * 100 + now.getDate();
+  const idx   = seed % QUOTES.length;
+  const q     = QUOTES[idx];
+  document.getElementById('quote-text').textContent = `"${q.text}"`;
+  document.getElementById('quote-attr').textContent = `— ${q.attr}`;
+}
+
+
+
+
+// ARCHITECTURE DIGEST
+const ARCH_API = 'YOUR_VERCEL_URL/api/arch';
+const NEWS_API = 'YOUR_VERCEL_URL/api/news';
+const ARCH_KEY = 'arch_digest_v1';
+
+function archDayKey() {
+  const d = new Date();
+  return d.getFullYear() + '-' + (d.getMonth()+1) + '-' + d.getDate();
+}
+
+function renderArch(data) {
+  const el = document.getElementById('arch-content');
+  if (!data) {
+    el.innerHTML = '<div class="arch-eyebrow">Daily Architecture Digest</div><div class="arch-rule"></div><div class="arch-placeholder"><div class="arch-placeholder-title">Building of the Day</div><div class="arch-placeholder-sub">Could not load today\'s building.</div></div>';
+    return;
+  }
+  const mapsUrl = 'https://www.google.com/maps/search/' + encodeURIComponent(data.name) + '/@' + data.lat + ',' + data.lng + ',17z';
+  const imgs = (data.images || []).slice(0, 3);
+  let imgHtml = '';
+  if (imgs.length) {
+    imgHtml = '<div class="arch-images">';
+    for (let i = 0; i < imgs.length; i++) {
+      imgHtml += '<div class="arch-img-wrap"><img src="' + imgs[i].url + '" alt="' + (imgs[i].caption || data.name) + '" onerror="this.style.display=\'none\'">';
+      if (imgs[i].caption) imgHtml += '<div class="arch-img-caption">' + imgs[i].caption + '</div>';
+      imgHtml += '</div>';
+    }
+    imgHtml += '</div>';
+  }
+  el.innerHTML =
+    '<div class="arch-eyebrow">Daily Architecture Digest</div>' +
+    '<div class="arch-rule"></div>' +
+    '<div class="arch-building-name">' + data.name + '</div>' +
+    '<div class="arch-meta">' + data.city + ', ' + data.country + ' <span>&middot;</span> ' + data.year + ' <span>&middot;</span> ' + data.architect + '</div>' +
+    imgHtml +
+    '<p class="arch-body">' + data.writeup + '</p>' +
+    '<div class="arch-detail-label">Design detail to notice</div>' +
+    '<p class="arch-detail-text">' + data.detail + '</p>' +
+    '<div class="arch-footer">' +
+      '<span class="arch-footer-label">Daily Architecture Digest</span>' +
+      '<a class="arch-maps-link" href="' + mapsUrl + '" target="_blank" rel="noopener">' +
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>' +
+        'View on Maps' +
+      '</a>' +
+    '</div>';
+}
+
+async function loadArch() {
+  var el = document.getElementById('arch-content');
+  var todayKey = archDayKey();
+  try {
+    var cached = sessionStorage.getItem(ARCH_KEY);
+    if (cached) {
+      var parsed = JSON.parse(cached);
+      if (parsed.key === todayKey) { renderArch(parsed.data); return; }
+    }
+  } catch(e) {}
+  el.innerHTML = '<div class="arch-loading">Researching today's building…</div>';
+  try {
+    var res = await fetch(ARCH_API);
+    if (!res.ok) throw new Error('API ' + res.status);
+    var data = await res.json();
+    if (data.error) throw new Error(data.error);
+    try { sessionStorage.setItem(ARCH_KEY, JSON.stringify({ key: todayKey, data: data })); } catch(e) {}
+    renderArch(data);
+  } catch(e) {
+    renderArch(null);
+    console.error('arch error', e);
+  }
+}
+
+
+async function loadAll() {
+  loadQuote();
+  loadArch();
+  await Promise.all([
+    loadEquities(), loadCrypto(), loadRates(),
+    loadFeedWithAI('cnbc'), loadFeedWithAI('bloomberg'), loadFeedWithAI('ft')
+  ]);
+  document.getElementById('rlabel').textContent =
+    `Updated ${new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}`;
+}
+loadAll();
+setInterval(loadAll, 30 * 60 * 1000);
+</script>
+</body>
+</html>
