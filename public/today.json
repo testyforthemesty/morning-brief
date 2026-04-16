@@ -1,0 +1,25 @@
+{
+  "name": "Bagsværd Church",
+  "city": "Bagsværd",
+  "country": "Denmark",
+  "year": 1976,
+  "architect": "Jørn Utzon",
+  "writeup": "Bagsværd Church sits quietly in a Copenhagen suburb, its corrugated concrete exterior giving almost no indication of what lies within. The interior is dominated by a continuous shell-like ceiling of cast concrete that billows and folds like clouds, flooding the nave with diffuse northern light. Utzon described the design as a collision between the universal — the cloud ceiling derived from ancient Chinese pavilion forms — and the local, the modest Danish parish. It is one of the most spatially surprising rooms in twentieth century architecture, and one of the least visited.",
+  "detail": "The undulating ceiling is formed from prefabricated concrete shell segments that overlap and interlock, each piece slightly different, creating an effect of movement despite being entirely static.",
+  "lat": 55.7576,
+  "lng": 12.4578,
+  "images": [
+    {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/Bagsvard_church_interior.jpg/800px-Bagsvard_church_interior.jpg",
+      "caption": "Interior nave with cloud ceiling"
+    },
+    {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Bagsvard_church_exterior.jpg/800px-Bagsvard_church_exterior.jpg",
+      "caption": "Corrugated concrete exterior"
+    },
+    {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Bagsvard_church_detail.jpg/800px-Bagsvard_church_detail.jpg",
+      "caption": "Ceiling detail"
+    }
+  ]
+}

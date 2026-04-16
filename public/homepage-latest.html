@@ -319,64 +319,29 @@ const FEEDS = {
   ft:        ['https://www.ft.com/rss/home/uk']
 };
 
-async function fetchFeedItems(urls) {
-  const all = await Promise.all(urls.map(url =>
-    fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&_=${Date.now()}`)
-      .then(r => r.json())
-      .then(d => d.status === 'ok' ? d.items : [])
-      .catch(() => [])
-  ));
-  return all.flat();
-}
-
-async function loadFeedWithAI(key) {
-  const el = document.getElementById(`feed-${key}`);
-  el.innerHTML = `<div class="news-spinner">Curating top stories…</div>`;
+async function loadFeed(key) {
+  const el = document.getElementById('feed-' + key);
   try {
-    const items = await fetchFeedItems(FEEDS[key]);
+    const urls = FEEDS[key];
+    const all = await Promise.all(urls.map(function(url) {
+      return fetch('https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(url) + '&_=' + Date.now())
+        .then(function(r) { return r.json(); })
+        .then(function(d) { return d.status === 'ok' ? d.items : []; })
+        .catch(function() { return []; });
+    }));
+    const items = all.flat().sort(function(a, b) {
+      return new Date(b.pubDate) - new Date(a.pubDate);
+    }).slice(0, 4);
     if (!items.length) throw new Error('no items');
-
-    // Build prompt for Claude to pick the 6 most significant stories
-    const headlines = items.slice(0, 30).map((item, i) =>
-      `${i+1}. ${item.title} [${item.pubDate?.slice(0,16) || ''}]`
-    ).join('\n');
-
-    const response = await fetch(NEWS_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ headlines })
-    });
-
-    const aiData = await response.json();
-    const indices = (aiData.indices || []).slice(0, 4);
-
-    // Map selected indices back to items
-    const selected = indices.length
-      ? indices.map(i => items[i - 1]).filter(Boolean)
-      : items.slice(0, 4);
-
-    el.innerHTML = selected.map(item => {
-      const ago = timeAgo(new Date(item.pubDate));
-      return `<a class="news-item" href="${item.link}" target="_blank" rel="noopener">
-        <div class="news-hed">${item.title}</div>
-        <div class="news-meta">${ago}</div>
-      </a>`;
+    el.innerHTML = items.map(function(item) {
+      var ago = timeAgo(new Date(item.pubDate));
+      return '<a class="news-item" href="' + item.link + '" target="_blank" rel="noopener">' +
+        '<div class="news-hed">' + item.title + '</div>' +
+        '<div class="news-meta">' + ago + '</div>' +
+        '</a>';
     }).join('');
-
   } catch(e) {
-    // Fallback: just show most recent items
-    try {
-      const items = await fetchFeedItems(FEEDS[key]);
-      el.innerHTML = items.slice(0,4).map(item => {
-        const ago = timeAgo(new Date(item.pubDate));
-        return `<a class="news-item" href="${item.link}" target="_blank" rel="noopener">
-          <div class="news-hed">${item.title}</div>
-          <div class="news-meta">${ago}</div>
-        </a>`;
-      }).join('') || `<div class="err">Could not load feed.</div>`;
-    } catch(_) {
-      el.innerHTML = `<div class="err">Could not load feed.</div>`;
-    }
+    el.innerHTML = '<div class="err">Could not load feed.</div>';
   }
 }
 
@@ -442,8 +407,7 @@ function loadQuote() {
 
 
 // ARCHITECTURE DIGEST
-const ARCH_API = 'YOUR_VERCEL_URL/api/arch';
-const NEWS_API = 'YOUR_VERCEL_URL/api/news';
+const ARCH_API = 'https://morning-brief-phillipnazarian-6478s-projects.vercel.app/today.json';
 const ARCH_KEY = 'arch_digest_v1';
 
 function archDayKey() {
@@ -517,7 +481,7 @@ async function loadAll() {
   loadArch();
   await Promise.all([
     loadEquities(), loadCrypto(), loadRates(),
-    loadFeedWithAI('cnbc'), loadFeedWithAI('bloomberg'), loadFeedWithAI('ft')
+    loadFeed('cnbc'), loadFeed('bloomberg'), loadFeed('ft')
   ]);
   document.getElementById('rlabel').textContent =
     `Updated ${new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}`;
