@@ -1,10 +1,6 @@
 {
-  "version": 2,
-  "buildCommand": null,
-  "outputDirectory": "public",
-  "functions": {
-    "api/*.js": {
-      "runtime": "nodejs18.x"
+   "version": 2,
+  "outputDirectory": "public"
     }
   }
 }
