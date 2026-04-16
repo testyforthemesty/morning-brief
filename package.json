@@ -1,6 +1,5 @@
 {
-   "name": "morning-brief",
+  "name": "morning-brief",
   "version": "1.0.0",
-  "private": true,
-  "type": "module"
+  "private": true
 }

@@ -1,22 +1,19 @@
-// api/news.js
-// Takes a list of headlines and returns the indices of the 4 most significant ones.
-
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
 
-  const { headlines } = req.body || {};
+  const body = req.body || {};
+  const headlines = body.headlines;
   if (!headlines) return res.status(400).json({ error: 'headlines required' });
 
   try {
-    const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -31,13 +28,13 @@ export default async function handler(req, res) {
       })
     });
 
-    const data = await anthropicRes.json();
-    const text = data.content?.[0]?.text || '[]';
+    const data = await response.json();
+    const text = (data.content && data.content[0] && data.content[0].text) || '[]';
     const match = text.match(/\[[\d,\s]+\]/);
     const indices = match ? JSON.parse(match[0]).slice(0, 4) : [];
-    return res.status(200).json({ indices });
+    return res.status(200).json({ indices: indices });
 
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
-}
+};
