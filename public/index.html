@@ -126,7 +126,7 @@
 <div class="main">
   <div class="arch-panel">
     <div id="arch-content" class="arch-inner">
-      <div class="arch-loading">Loading today's building…</div>
+      <div class="arch-loading">Loading today&#39;s building&#8230;</div>
     </div>
   </div>
 
@@ -461,7 +461,7 @@ async function loadArch() {
       if (parsed.key === todayKey) { renderArch(parsed.data); return; }
     }
   } catch(e) {}
-  el.innerHTML = '<div class="arch-loading">Researching today\'s building…</div>';
+  el.innerHTML = "<div class=\"arch-loading\">Researching today's building…</div>";
   try {
     var res = await fetch(ARCH_API);
     if (!res.ok) throw new Error('API ' + res.status);
