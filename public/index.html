@@ -1172,83 +1172,90 @@ async function fetchWikiImages(buildingName, architectName) {
   var images = [];
   var seenUrls = new Set();
 
-  function toSlug(name) { return encodeURIComponent(name.replace(/ /g, '_')); }
-
   function addImg(url, caption) {
     if (!url || seenUrls.has(url)) return;
-    if (/\.svg|\.gif|\.pdf|flag_of|logo|icon|coat_of|seal_of|signature/i.test(url)) return;
+    if (/\.svg|\.gif|\.pdf|flag_of|logo|icon|coat_of|seal_of|signature|map_of|location_map/i.test(url)) return;
     seenUrls.add(url);
     images.push({ url: url, caption: caption || '' });
   }
 
-  function isPhoto(info) {
-    // Strictly only jpeg and png — no PDFs, no SVGs, no GIFs
-    return info && (info.mime === 'image/jpeg' || info.mime === 'image/png');
+  async function resolveFilesToUrls(fileTitles) {
+    if (!fileTitles.length) return;
+    try {
+      var r = await fetch('https://commons.wikimedia.org/w/api.php?action=query' +
+        '&titles=' + fileTitles.slice(0, 10).map(encodeURIComponent).join('|') +
+        '&prop=imageinfo&iiprop=url|mime|size&iiurlwidth=800&format=json&origin=*');
+      if (!r.ok) return;
+      var d = await r.json();
+      var pages = Object.values((d.query || {}).pages || {});
+      pages.sort(function(a, b) {
+        return (((b.imageinfo||[])[0]||{}).size||0) - (((a.imageinfo||[])[0]||{}).size||0);
+      });
+      pages.forEach(function(p) {
+        if (images.length >= 3) return;
+        var info = (p.imageinfo || [])[0];
+        if (!info) return;
+        if (info.mime !== 'image/jpeg' && info.mime !== 'image/png') return;
+        if ((info.size || 0) < 50000) return;
+        addImg(info.thumburl || info.url, '');
+      });
+    } catch(e) {}
   }
 
-  // 1. Wikipedia REST summary — try exact slug, then search if 404
+  // Source 1: Commons category search — most reliable for correct building photos
   try {
-    var r = await fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' + toSlug(buildingName),
-      { headers: { 'Accept': 'application/json' } });
-    if (r.status === 404) {
-      // Try Wikipedia search to find the correct article title
-      var sr = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=' +
-        encodeURIComponent(buildingName) + '&srlimit=1&format=json&origin=*');
-      if (sr.ok) {
-        var sd = await sr.json();
-        var hits = (sd.query || {}).search || [];
-        if (hits.length) {
-          var r2 = await fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' +
-            toSlug(hits[0].title), { headers: { 'Accept': 'application/json' } });
-          if (r2.ok) r = r2;
+    var catR = await fetch('https://commons.wikimedia.org/w/api.php?action=query' +
+      '&list=search&srnamespace=14&srsearch=' + encodeURIComponent(buildingName) +
+      '&srlimit=1&format=json&origin=*');
+    if (catR.ok) {
+      var catD = await catR.json();
+      var catHits = ((catD.query || {}).search || []);
+      if (catHits.length) {
+        var catTitle = catHits[0].title;
+        var memR = await fetch('https://commons.wikimedia.org/w/api.php?action=query' +
+          '&list=categorymembers&cmtitle=' + encodeURIComponent(catTitle) +
+          '&cmtype=file&cmlimit=10&format=json&origin=*');
+        if (memR.ok) {
+          var memD = await memR.json();
+          var fileTitles = ((memD.query || {}).categorymembers || []).map(function(m) { return m.title; });
+          await resolveFilesToUrls(fileTitles);
         }
       }
     }
-    if (r.ok) {
-      var d = await r.json();
-      addImg((d.originalimage || d.thumbnail || {}).source, buildingName);
-    }
   } catch(e) {}
 
-  // 2. Commons search — building name, strict photo mime filter
-  try {
-    var cr = await fetch('https://commons.wikimedia.org/w/api.php?action=query' +
-      '&generator=search&gsrnamespace=6&gsrlimit=30' +
-      '&gsrsearch=' + encodeURIComponent(buildingName) +
-      '&prop=imageinfo&iiprop=url|mime|size&iiurlwidth=800' +
-      '&format=json&origin=*');
-    if (cr.ok) {
-      var cd = await cr.json();
-      var pages = Object.values((cd.query || {}).pages || {})
-        .filter(function(p) { return isPhoto((p.imageinfo || [])[0]); })
-        .sort(function(a, b) {
-          return (((b.imageinfo||[])[0]||{}).size||0) - (((a.imageinfo||[])[0]||{}).size||0);
-        });
-      pages.forEach(function(p) {
-        if (images.length >= 3) return;
-        addImg((p.imageinfo[0].thumburl || p.imageinfo[0].url), '');
-      });
-    }
-  } catch(e) {}
+  // Source 2: Wikipedia REST summary — fast lead photo fallback
+  if (images.length < 1) {
+    try {
+      var slug = encodeURIComponent(buildingName.replace(/ /g, '_'));
+      var sr = await fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' + slug,
+        { headers: { 'Accept': 'application/json' } });
+      if (sr.ok) {
+        var sd = await sr.json();
+        addImg((sd.originalimage || sd.thumbnail || {}).source, buildingName);
+      }
+    } catch(e) {}
+  }
 
-  // 3. Commons search — add architect name if still need more photos
+  // Source 3: Commons text search fallback if still under 3
   if (images.length < 3) {
     try {
-      var cr2 = await fetch('https://commons.wikimedia.org/w/api.php?action=query' +
+      var cr = await fetch('https://commons.wikimedia.org/w/api.php?action=query' +
         '&generator=search&gsrnamespace=6&gsrlimit=30' +
-        '&gsrsearch=' + encodeURIComponent(buildingName + ' ' + architectName) +
-        '&prop=imageinfo&iiprop=url|mime|size&iiurlwidth=800' +
-        '&format=json&origin=*');
-      if (cr2.ok) {
-        var cd2 = await cr2.json();
-        var pages2 = Object.values((cd2.query || {}).pages || {})
-          .filter(function(p) { return isPhoto((p.imageinfo || [])[0]); })
-          .sort(function(a, b) {
-            return (((b.imageinfo||[])[0]||{}).size||0) - (((a.imageinfo||[])[0]||{}).size||0);
-          });
-        pages2.forEach(function(p) {
+        '&gsrsearch=' + encodeURIComponent(buildingName) +
+        '&prop=imageinfo&iiprop=url|mime|size&iiurlwidth=800&format=json&origin=*');
+      if (cr.ok) {
+        var cd = await cr.json();
+        var cpages = Object.values((cd.query || {}).pages || {});
+        cpages.sort(function(a, b) {
+          return (((b.imageinfo||[])[0]||{}).size||0) - (((a.imageinfo||[])[0]||{}).size||0);
+        });
+        cpages.forEach(function(p) {
           if (images.length >= 3) return;
-          addImg((p.imageinfo[0].thumburl || p.imageinfo[0].url), '');
+          var info = (p.imageinfo || [])[0];
+          if (!info || (info.mime !== 'image/jpeg' && info.mime !== 'image/png')) return;
+          if ((info.size || 0) < 50000) return;
+          addImg(info.thumburl || info.url, '');
         });
       }
     } catch(e) {}
