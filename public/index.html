@@ -203,16 +203,13 @@ function tick() {
 tick();
 
 // Shared Twelve Data result — fetched once, used by both equities and rates
-var _tdData = null;
 var _tdPromise = null;
 
 function getTDData() {
   if (_tdPromise) return _tdPromise;
-  // Fetch all symbols in one call: 8 equities + 2 treasury tickers = 10 credits
-  const syms = 'GOOGL,AMZN,AAPL,BRK.B,COIN,NVDA,QCOM,SPY,%5EFVX,%5ETNX';
+  const syms = 'GOOGL,AMZN,AAPL,BRK.B,COIN,NVDA,QCOM,SPY';
   _tdPromise = fetch(`https://api.twelvedata.com/time_series?symbol=${syms}&interval=1day&outputsize=32&apikey=${TD_KEY}`)
     .then(r => r.json())
-    .then(d => { _tdData = d; return d; })
     .catch(() => ({}));
   return _tdPromise;
 }
