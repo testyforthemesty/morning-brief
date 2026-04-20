@@ -267,24 +267,26 @@ async function loadCrypto() {
 async function loadRates() {
   const rows = document.getElementById('rate-rows');
   try {
-    // Pensford quotes.xml — live intraday rates, updated every ~10 min
-    const res = await fetch('https://19621209.fs1.hubspotusercontent-na1.net/hubfs/19621209/quotes.xml?_=' + Date.now());
-    const text = await res.text();
-    const parser = new DOMParser();
-    const xml = parser.parseFromString(text, 'application/xml');
-    const ts = xml.documentElement.getAttribute('timeStamp') || '';
+    // ── Live rates from Pensford quotes.xml ──────────────────────────────
+    const xmlRes = await fetch(
+      'https://19621209.fs1.hubspotusercontent-na1.net/hubfs/19621209/quotes.xml?_=' + Date.now()
+    );
+    const xmlText = await xmlRes.text();
+    const xml = new DOMParser().parseFromString(xmlText, 'application/xml');
+    const ts  = xml.documentElement.getAttribute('timeStamp') || '';
 
     function getRecord(sym) {
       var records = xml.querySelectorAll('record');
       for (var i = 0; i < records.length; i++) {
-        if (records[i].querySelector('symbol').textContent === sym) {
-          var quoteEl  = records[i].querySelector('quote');
-          var changeEl = records[i].querySelector('change');
-          var dateEl   = records[i].querySelector('quoteDate');
+        var symEl = records[i].querySelector('symbol');
+        if (symEl && symEl.textContent.trim() === sym) {
+          // <quote> is rate as decimal e.g. 0.0435 → 4.35%
+          // <change> is daily change as decimal e.g. 0.0005 → 0.05% → 5 bps
+          var q = parseFloat(records[i].querySelector('quote').textContent);
+          var c = parseFloat(records[i].querySelector('change').textContent);
           return {
-            val:  parseFloat(quoteEl  ? quoteEl.textContent  : '0') * 100,
-            chg1d: parseFloat(changeEl ? changeEl.textContent : '0') * 100,
-            date: dateEl ? dateEl.textContent : ''
+            val:   q * 100,          // percent e.g. 4.35
+            bps1d: c * 100 * 100     // bps e.g. 5.0  (decimal→pct→bps)
           };
         }
       }
@@ -295,60 +297,78 @@ async function loadRates() {
     var y10  = getRecord('TREASURY Y10');
     var sofr = getRecord('SOFRTERM_M1');
 
-    // Fetch 30-day-ago values from Pensford Supabase historical tables
-    // Use lte + desc + limit=1 to get the most recent record ON OR BEFORE 30 days ago
-    var ago30 = new Date(); ago30.setDate(ago30.getDate() - 30);
-    var ago30str = ago30.toISOString().split('T')[0];
+    // ── 30D change via Twelve Data (same API already used for equities) ──
+    // ^FVX = 5Y Treasury, ^TNX = 10Y Treasury
+    // SOFR has no TD ticker so we compute 30D from Pensford Supabase
+    var td30 = {};
+    try {
+      var tdRes = await fetch(
+        'https://api.twelvedata.com/time_series?symbol=%5EFVX,%5ETNX&interval=1day&outputsize=32&apikey=' + TD_KEY
+      );
+      var tdData = await tdRes.json();
+      [['%5EFVX','y5'], ['%5ETNX','y10']].forEach(function(pair) {
+        // key in response uses the decoded symbol
+        var key = pair[0] === '%5EFVX' ? '^FVX' : '^TNX';
+        var label = pair[1];
+        var d = tdData[key];
+        if (d && d.values && d.values.length >= 31) {
+          var now30  = parseFloat(d.values[0].close);
+          var then30 = parseFloat(d.values[d.values.length - 1].close);
+          td30[label] = (now30 - then30) * 100; // already in %, convert to bps
+        }
+      });
+    } catch(e) {}
 
-    async function get30dAgo(table, rateLabel, rateField) {
-      try {
-        var url = 'https://daectsfxmldypacvammr.supabase.co/rest/v1/' + table +
-          '?rate_label=eq.' + encodeURIComponent(rateLabel) +
-          '&reset_date=lte.' + ago30str +
-          '&order=reset_date.desc&limit=1';
-        var r = await fetch(url, { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY } });
-        var d = await r.json();
-        if (!d || !d.length) return null;
-        // Field name may differ between tables — try both 'rate' and 'value'
-        var field = rateField || 'rate';
-        var raw = d[0][field];
-        if (raw === undefined || raw === null) return null;
-        // Pensford stores as decimal (e.g. 0.0435 = 4.35%) — multiply by 100
-        var v = parseFloat(raw);
-        return v < 1 ? v * 100 : v; // handle both decimal and already-percentage formats
-      } catch(e) { return null; }
-    }
-
-    var [v5_30, v10_30, vsofr_30] = await Promise.all([
-      get30dAgo('historical_treasury', '5Y Treasury', 'rate'),
-      get30dAgo('historical_treasury', '10Y Treasury', 'rate'),
-      get30dAgo('historical_floating', '1M Term SOFR', 'rate')
-    ]);
-
-    function rateRow(label, r, old30) {
-      if (!r) return '<div class="rate-row"><div class="rate-top"><span class="rate-name">' + label + '</span><span class="rate-val">—</span></div></div>';
-      var cls1d = r.chg1d >= 0 ? 'up' : 'down';
-      var sign1d = r.chg1d >= 0 ? '+' : '';
-      // chg1d is already in bps (multiplied by 100 when parsed from XML ×100, then ×100 again = ×10000 — fix: chg from XML is already decimal change, ×100 = bps)
-      var bps1d = r.chg1d; // already correct: parsed as (xml_change * 100) which gives bps directly
-      var badge1d = '<span class="badge ' + cls1d + '"><span class="badge-label">1D</span>' + sign1d + bps1d.toFixed(1) + 'bps</span>';
-      var badge30 = '';
-      if (old30 !== null) {
-        var diff30 = r.val - old30;
-        var cls30 = diff30 >= 0 ? 'up' : 'down';
-        var sign30 = diff30 >= 0 ? '+' : '';
-        badge30 = '<span class="badge ' + cls30 + '"><span class="badge-label">30D</span>' + sign30 + diff30.toFixed(1) + 'bps</span>';
+    // 30D for SOFR from Pensford Supabase
+    var sofr30 = null;
+    try {
+      var ago30 = new Date();
+      ago30.setDate(ago30.getDate() - 30);
+      var ago30str = ago30.toISOString().split('T')[0];
+      var spRes = await fetch(
+        'https://daectsfxmldypacvammr.supabase.co/rest/v1/historical_floating' +
+        '?rate_label=eq.1M%20Term%20SOFR' +
+        '&reset_date=lte.' + ago30str +
+        '&order=reset_date.desc&limit=1',
+        { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY } }
+      );
+      var spData = await spRes.json();
+      if (spData && spData.length && spData[0].rate !== undefined) {
+        var raw = parseFloat(spData[0].rate);
+        // Supabase rate stored as decimal (0.0435) or percent (4.35) — normalise
+        var spVal = raw < 1 ? raw * 100 : raw;
+        if (sofr) sofr30 = sofr.val - spVal;
       }
+    } catch(e) {}
+
+    function rateRow(label, r, bps30) {
+      if (!r) return '<div class="rate-row"><div class="rate-top">' +
+        '<span class="rate-name">' + label + '</span><span class="rate-val">—</span></div></div>';
+
+      var cls1d  = r.bps1d  >= 0 ? 'up' : 'down';
+      var sign1d = r.bps1d  >= 0 ? '+' : '';
+      var b1d = '<span class="badge ' + cls1d + '"><span class="badge-label">1D</span>' +
+        sign1d + r.bps1d.toFixed(1) + 'bps</span>';
+
+      var b30 = '';
+      if (bps30 !== null && bps30 !== undefined) {
+        var cls30  = bps30 >= 0 ? 'up' : 'down';
+        var sign30 = bps30 >= 0 ? '+' : '';
+        b30 = '<span class="badge ' + cls30 + '"><span class="badge-label">30D</span>' +
+          sign30 + bps30.toFixed(1) + 'bps</span>';
+      }
+
       return '<div class="rate-row">' +
-        '<div class="rate-top"><span class="rate-name">' + label + '</span><span class="rate-val">' + r.val.toFixed(2) + '%</span></div>' +
-        '<div class="rate-changes">' + badge1d + badge30 + '</div>' +
+        '<div class="rate-top"><span class="rate-name">' + label + '</span>' +
+        '<span class="rate-val">' + r.val.toFixed(2) + '%</span></div>' +
+        '<div class="rate-changes">' + b1d + b30 + '</div>' +
         '</div>';
     }
 
     rows.innerHTML =
-      rateRow('5Y Treasury',  y5,   v5_30) +
-      rateRow('10Y Treasury', y10,  v10_30) +
-      rateRow('1M Term SOFR', sofr, vsofr_30) +
+      rateRow('5Y Treasury',  y5,   td30['y5']  !== undefined ? td30['y5']  : null) +
+      rateRow('10Y Treasury', y10,  td30['y10'] !== undefined ? td30['y10'] : null) +
+      rateRow('1M Term SOFR', sofr, sofr30) +
       '<div class="rate-asof">As of ' + ts + ' · Pensford</div>';
 
   } catch(e) {
