@@ -296,32 +296,42 @@ async function loadRates() {
     var sofr = getRecord('SOFRTERM_M1');
 
     // Fetch 30-day-ago values from Pensford Supabase historical tables
-    var ago30 = new Date(); ago30.setDate(ago30.getDate() - 32);
+    // Use lte + desc + limit=1 to get the most recent record ON OR BEFORE 30 days ago
+    var ago30 = new Date(); ago30.setDate(ago30.getDate() - 30);
     var ago30str = ago30.toISOString().split('T')[0];
 
-    async function get30dAgo(table, rateLabel) {
+    async function get30dAgo(table, rateLabel, rateField) {
       try {
         var url = 'https://daectsfxmldypacvammr.supabase.co/rest/v1/' + table +
           '?rate_label=eq.' + encodeURIComponent(rateLabel) +
-          '&reset_date=gte.' + ago30str +
-          '&order=reset_date.asc&limit=2';
+          '&reset_date=lte.' + ago30str +
+          '&order=reset_date.desc&limit=1';
         var r = await fetch(url, { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY } });
         var d = await r.json();
-        return d && d.length ? parseFloat(d[0].rate) * 100 : null;
+        if (!d || !d.length) return null;
+        // Field name may differ between tables — try both 'rate' and 'value'
+        var field = rateField || 'rate';
+        var raw = d[0][field];
+        if (raw === undefined || raw === null) return null;
+        // Pensford stores as decimal (e.g. 0.0435 = 4.35%) — multiply by 100
+        var v = parseFloat(raw);
+        return v < 1 ? v * 100 : v; // handle both decimal and already-percentage formats
       } catch(e) { return null; }
     }
 
     var [v5_30, v10_30, vsofr_30] = await Promise.all([
-      get30dAgo('historical_treasury', '5Y Treasury'),
-      get30dAgo('historical_treasury', '10Y Treasury'),
-      get30dAgo('historical_floating', '1M Term SOFR')
+      get30dAgo('historical_treasury', '5Y Treasury', 'rate'),
+      get30dAgo('historical_treasury', '10Y Treasury', 'rate'),
+      get30dAgo('historical_floating', '1M Term SOFR', 'rate')
     ]);
 
     function rateRow(label, r, old30) {
       if (!r) return '<div class="rate-row"><div class="rate-top"><span class="rate-name">' + label + '</span><span class="rate-val">—</span></div></div>';
       var cls1d = r.chg1d >= 0 ? 'up' : 'down';
       var sign1d = r.chg1d >= 0 ? '+' : '';
-      var badge1d = '<span class="badge ' + cls1d + '"><span class="badge-label">1D</span>' + sign1d + (r.chg1d * 100).toFixed(1) + 'bps</span>';
+      // chg1d is already in bps (multiplied by 100 when parsed from XML ×100, then ×100 again = ×10000 — fix: chg from XML is already decimal change, ×100 = bps)
+      var bps1d = r.chg1d; // already correct: parsed as (xml_change * 100) which gives bps directly
+      var badge1d = '<span class="badge ' + cls1d + '"><span class="badge-label">1D</span>' + sign1d + bps1d.toFixed(1) + 'bps</span>';
       var badge30 = '';
       if (old30 !== null) {
         var diff30 = r.val - old30;
@@ -1192,109 +1202,95 @@ function renderArch(data, imgs) {
 //   2. Wikipedia page images API → additional images from the article itself
 //   3. Wikimedia Commons search fallback → broader image search
 async function fetchWikiImages(buildingName, architectName) {
-  var images = [];
   var seenUrls = new Set();
+  var images = [];
 
-  function toSlug(name) {
-    return encodeURIComponent(name.replace(/ /g, '_'));
-  }
+  function toSlug(name) { return encodeURIComponent(name.replace(/ /g, '_')); }
 
-  function addImg(url, caption) {
-    if (!url || seenUrls.has(url)) return false;
-    // Skip icons, logos, flags (small files or SVGs)
-    if (url.indexOf('.svg') !== -1 || url.indexOf('Flag_of') !== -1 || url.indexOf('logo') !== -1) return false;
-    seenUrls.add(url);
-    images.push({ url: url, caption: caption || '' });
+  function goodUrl(url) {
+    if (!url) return false;
+    if (seenUrls.has(url)) return false;
+    var low = url.toLowerCase();
+    if (low.indexOf('.svg') !== -1) return false;
+    if (/flag_of|logo|icon|coat_of|seal_of|signature|\.gif/i.test(url)) return false;
     return true;
   }
 
-  // 1. Wikipedia REST summary → lead photo
-  try {
-    var sr = await fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' + toSlug(buildingName),
-      { headers: { 'Accept': 'application/json' } });
-    if (sr.ok) {
-      var sd = await sr.json();
-      var imgUrl = (sd.originalimage || sd.thumbnail || {}).source;
-      addImg(imgUrl, sd.title || buildingName);
-    }
-  } catch(e) {}
-
-  // 2. Wikipedia page images API — gets all images used in the article (more reliable than Commons search)
-  if (images.length < 3) {
-    try {
-      var piUrl = 'https://en.wikipedia.org/w/api.php?action=query&titles=' + toSlug(buildingName) +
-        '&prop=images&imlimit=15&format=json&origin=*';
-      var pir = await fetch(piUrl);
-      if (pir.ok) {
-        var pid = await pir.json();
-        var pages = Object.values((pid.query || {}).pages || {});
-        if (pages.length) {
-          var imgTitles = (pages[0].images || [])
-            .map(function(i) { return i.title; })
-            .filter(function(t) { return /\.(jpg|jpeg|png)/i.test(t) && !/flag|logo|icon|map|coat|seal/i.test(t); })
-            .slice(0, 6);
-          if (imgTitles.length) {
-            var infoUrl = 'https://en.wikipedia.org/w/api.php?action=query&titles=' +
-              imgTitles.map(function(t){ return encodeURIComponent(t); }).join('|') +
-              '&prop=imageinfo&iiprop=url|mime|size&iiurlwidth=900&format=json&origin=*';
-            var infor = await fetch(infoUrl);
-            if (infor.ok) {
-              var infod = await infor.json();
-              var infopages = Object.values((infod.query || {}).pages || {});
-              // Sort by file size descending so we pick the most substantial photos first
-              infopages.sort(function(a,b){
-                var sa = ((a.imageinfo||[])[0]||{}).size||0;
-                var sb = ((b.imageinfo||[])[0]||{}).size||0;
-                return sb - sa;
-              });
-              infopages.forEach(function(p) {
-                if (images.length >= 3) return;
-                var info = (p.imageinfo || [])[0];
-                if (!info) return;
-                if (info.mime === 'image/jpeg' || info.mime === 'image/png') {
-                  addImg(info.thumburl || info.url, '');
-                }
-              });
-            }
-          }
-        }
-      }
-    } catch(e) {}
+  function addImg(url, caption) {
+    if (!goodUrl(url)) return;
+    seenUrls.add(url);
+    images.push({ url: url, caption: caption || '' });
   }
 
-  // 3. Wikimedia Commons search as final fallback
-  if (images.length < 3) {
-    try {
-      var terms = [buildingName, buildingName + ' ' + architectName];
-      for (var t = 0; t < terms.length && images.length < 3; t++) {
-        var commonsUrl = 'https://commons.wikimedia.org/w/api.php?action=query' +
-          '&generator=search&gsrnamespace=6&gsrlimit=10' +
-          '&gsrsearch=' + encodeURIComponent(terms[t]) +
-          '&prop=imageinfo&iiprop=url|mime|size&iiurlwidth=900' +
-          '&format=json&origin=*';
-        var cr = await fetch(commonsUrl);
-        if (cr.ok) {
-          var cd = await cr.json();
-          var cpages = Object.values((cd.query || {}).pages || {});
-          cpages.sort(function(a,b){
-            var sa = ((a.imageinfo||[])[0]||{}).size||0;
-            var sb = ((b.imageinfo||[])[0]||{}).size||0;
-            return sb - sa;
+  // All three sources run in parallel
+  var [summary, pageImgs, commons] = await Promise.allSettled([
+
+    // 1. REST summary — always the best lead photo
+    fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' + toSlug(buildingName),
+        { headers: { 'Accept': 'application/json' } })
+      .then(function(r) { return r.ok ? r.json() : {}; })
+      .catch(function() { return {}; }),
+
+    // 2. Page images — fetch titles then resolve to URLs in one extra call
+    fetch('https://en.wikipedia.org/w/api.php?action=query&titles=' + toSlug(buildingName) +
+        '&prop=images&imlimit=20&format=json&origin=*')
+      .then(function(r) { return r.ok ? r.json() : {}; })
+      .then(function(d) {
+        var pages = Object.values((d.query || {}).pages || {});
+        if (!pages.length) return [];
+        var titles = (pages[0].images || [])
+          .map(function(i) { return i.title; })
+          .filter(function(t) { return /\.(jpg|jpeg|png)$/i.test(t) && !/flag|logo|icon|map|coat|seal|signature|portrait/i.test(t); })
+          .slice(0, 8);
+        if (!titles.length) return [];
+        return fetch('https://en.wikipedia.org/w/api.php?action=query&titles=' +
+            titles.map(encodeURIComponent).join('|') +
+            '&prop=imageinfo&iiprop=url|mime|size&iiurlwidth=800&format=json&origin=*')
+          .then(function(r2) { return r2.ok ? r2.json() : {}; })
+          .then(function(d2) {
+            return Object.values((d2.query || {}).pages || {})
+              .map(function(p) { return { info: (p.imageinfo || [])[0] }; })
+              .filter(function(x) { return x.info && (x.info.mime === 'image/jpeg' || x.info.mime === 'image/png') && (x.info.size || 0) > 15000; })
+              .sort(function(a, b) { return (b.info.size || 0) - (a.info.size || 0); })
+              .map(function(x) { return x.info.thumburl || x.info.url; });
           });
-          cpages.forEach(function(p) {
-            if (images.length >= 3) return;
-            var info = (p.imageinfo || [])[0];
-            if (!info) return;
-            if (info.mime === 'image/jpeg' || info.mime === 'image/png') {
-              addImg(info.thumburl || info.url, '');
-            }
-          });
-        }
-      }
-    } catch(e) {}
+      })
+      .catch(function() { return []; }),
+
+    // 3. Commons search — best fallback for less-known buildings
+    fetch('https://commons.wikimedia.org/w/api.php?action=query' +
+        '&generator=search&gsrnamespace=6&gsrlimit=12' +
+        '&gsrsearch=' + encodeURIComponent(buildingName) +
+        '&prop=imageinfo&iiprop=url|mime|size&iiurlwidth=800&format=json&origin=*')
+      .then(function(r) { return r.ok ? r.json() : {}; })
+      .then(function(d) {
+        return Object.values((d.query || {}).pages || {})
+          .map(function(p) { return { info: (p.imageinfo || [])[0] }; })
+          .filter(function(x) { return x.info && (x.info.mime === 'image/jpeg' || x.info.mime === 'image/png') && (x.info.size || 0) > 15000; })
+          .sort(function(a, b) { return (b.info.size || 0) - (a.info.size || 0); })
+          .map(function(x) { return x.info.thumburl || x.info.url; });
+      })
+      .catch(function() { return []; })
+  ]);
+
+  // Source 1: summary lead photo
+  if (summary.status === 'fulfilled') {
+    var sd = summary.value;
+    var u = (sd.originalimage || sd.thumbnail || {}).source;
+    addImg(u, sd.title || buildingName);
   }
 
-  return images.slice(0, 3);
+  // Source 2: page images
+  if (pageImgs.status === 'fulfilled' && Array.isArray(pageImgs.value)) {
+    pageImgs.value.forEach(function(u) { if (images.length < 3) addImg(u, ''); });
+  }
+
+  // Source 3: commons
+  if (commons.status === 'fulfilled' && Array.isArray(commons.value)) {
+    commons.value.forEach(function(u) { if (images.length < 3) addImg(u, ''); });
+  }
+
+  return images;
 }
 
 async function loadArch() {
