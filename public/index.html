@@ -154,12 +154,14 @@
       <div class="headlines-header">
         <div class="sec-label">Headlines</div>
         <div class="news-tabs">
-          <button class="news-tab active" onclick="tab('cnbc')">CNBC</button>
+          <button class="news-tab active" onclick="tab('marketwatch')">MarketWatch</button>
+          <button class="news-tab" onclick="tab('cnbc')">CNBC</button>
           <button class="news-tab" onclick="tab('bloomberg')">Bloomberg</button>
           <button class="news-tab" onclick="tab('ft')">FT</button>
         </div>
       </div>
-      <div class="news-feed active" id="feed-cnbc"><div class="loading">Loading…</div></div>
+      <div class="news-feed active" id="feed-marketwatch"><div class="loading">Loading…</div></div>
+      <div class="news-feed" id="feed-cnbc"><div class="loading">Loading…</div></div>
       <div class="news-feed" id="feed-bloomberg"><div class="loading">Loading…</div></div>
       <div class="news-feed" id="feed-ft"><div class="loading">Loading…</div></div>
     </div>
@@ -265,7 +267,8 @@ async function loadCrypto() {
 async function loadRates() {
   const rows = document.getElementById('rate-rows');
   try {
-    const res = await fetch('https://19621209.fs1.hubspotusercontent-na1.net/hubfs/19621209/quotes.xml');
+    // Pensford quotes.xml — live intraday rates, updated every ~10 min
+    const res = await fetch('https://19621209.fs1.hubspotusercontent-na1.net/hubfs/19621209/quotes.xml?_=' + Date.now());
     const text = await res.text();
     const parser = new DOMParser();
     const xml = parser.parseFromString(text, 'application/xml');
@@ -275,10 +278,13 @@ async function loadRates() {
       var records = xml.querySelectorAll('record');
       for (var i = 0; i < records.length; i++) {
         if (records[i].querySelector('symbol').textContent === sym) {
+          var quoteEl  = records[i].querySelector('quote');
+          var changeEl = records[i].querySelector('change');
+          var dateEl   = records[i].querySelector('quoteDate');
           return {
-            val: parseFloat(records[i].querySelector('quote').textContent) * 100,
-            chg: parseFloat(records[i].querySelector('change').textContent) * 100,
-            date: records[i].querySelector('quoteDate').textContent
+            val:  parseFloat(quoteEl  ? quoteEl.textContent  : '0') * 100,
+            chg1d: parseFloat(changeEl ? changeEl.textContent : '0') * 100,
+            date: dateEl ? dateEl.textContent : ''
           };
         }
       }
@@ -289,41 +295,67 @@ async function loadRates() {
     var y10  = getRecord('TREASURY Y10');
     var sofr = getRecord('SOFRTERM_M1');
 
-    var rateData = [
-      {label: '5Y Treasury',  r: y5},
-      {label: '10Y Treasury', r: y10},
-      {label: '1M Term SOFR', r: sofr}
-    ];
+    // Fetch 30-day-ago values from Pensford Supabase historical tables
+    var ago30 = new Date(); ago30.setDate(ago30.getDate() - 32);
+    var ago30str = ago30.toISOString().split('T')[0];
 
-    rows.innerHTML = rateData.map(function(item) {
-      var v = item.r;
-      if (!v) return '<div class="rate-row"><div class="rate-top"><span class="rate-name">' + item.label + '</span><span class="rate-val">—</span></div></div>';
-      var chgCls = v.chg >= 0 ? 'up' : 'down';
-      var sign   = v.chg >= 0 ? '+' : '';
+    async function get30dAgo(table, rateLabel) {
+      try {
+        var url = 'https://daectsfxmldypacvammr.supabase.co/rest/v1/' + table +
+          '?rate_label=eq.' + encodeURIComponent(rateLabel) +
+          '&reset_date=gte.' + ago30str +
+          '&order=reset_date.asc&limit=2';
+        var r = await fetch(url, { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY } });
+        var d = await r.json();
+        return d && d.length ? parseFloat(d[0].rate) * 100 : null;
+      } catch(e) { return null; }
+    }
+
+    var [v5_30, v10_30, vsofr_30] = await Promise.all([
+      get30dAgo('historical_treasury', '5Y Treasury'),
+      get30dAgo('historical_treasury', '10Y Treasury'),
+      get30dAgo('historical_floating', '1M Term SOFR')
+    ]);
+
+    function rateRow(label, r, old30) {
+      if (!r) return '<div class="rate-row"><div class="rate-top"><span class="rate-name">' + label + '</span><span class="rate-val">—</span></div></div>';
+      var cls1d = r.chg1d >= 0 ? 'up' : 'down';
+      var sign1d = r.chg1d >= 0 ? '+' : '';
+      var badge1d = '<span class="badge ' + cls1d + '"><span class="badge-label">1D</span>' + sign1d + (r.chg1d * 100).toFixed(1) + 'bps</span>';
+      var badge30 = '';
+      if (old30 !== null) {
+        var diff30 = r.val - old30;
+        var cls30 = diff30 >= 0 ? 'up' : 'down';
+        var sign30 = diff30 >= 0 ? '+' : '';
+        badge30 = '<span class="badge ' + cls30 + '"><span class="badge-label">30D</span>' + sign30 + diff30.toFixed(1) + 'bps</span>';
+      }
       return '<div class="rate-row">' +
-        '<div class="rate-top">' +
-          '<span class="rate-name">' + item.label + '</span>' +
-          '<span class="rate-val">' + v.val.toFixed(2) + '%</span>' +
-        '</div>' +
-        '<div class="rate-changes">' +
-          '<span class="badge ' + chgCls + '"><span class="badge-label">1D</span>' + sign + (v.chg * 100).toFixed(1) + 'bps</span>' +
-        '</div>' +
-      '</div>';
-    }).join('') + '<div class="rate-asof">As of ' + ts + ' · Pensford</div>';
+        '<div class="rate-top"><span class="rate-name">' + label + '</span><span class="rate-val">' + r.val.toFixed(2) + '%</span></div>' +
+        '<div class="rate-changes">' + badge1d + badge30 + '</div>' +
+        '</div>';
+    }
+
+    rows.innerHTML =
+      rateRow('5Y Treasury',  y5,   v5_30) +
+      rateRow('10Y Treasury', y10,  v10_30) +
+      rateRow('1M Term SOFR', sofr, vsofr_30) +
+      '<div class="rate-asof">As of ' + ts + ' · Pensford</div>';
 
   } catch(e) {
     rows.innerHTML = '<div class="err">Could not load rates.</div>';
   }
 }
 
-// NEWS — Claude API picks top stories from multiple feeds per source
+// NEWS
 const FEEDS = {
-  cnbc:      ['https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664',
-              'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=15839135'],
-  bloomberg: ['https://feeds.bloomberg.com/markets/news.rss',
-              'https://feeds.bloomberg.com/politics/news.rss',
-              'https://feeds.bloomberg.com/technology/news.rss'],
-  ft:        ['https://www.ft.com/rss/home/uk']
+  marketwatch: ['https://feeds.content.dowjones.io/public/rss/mw_realtimeheadlines',
+                'https://feeds.content.dowjones.io/public/rss/mw_topstories'],
+  cnbc:        ['https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664',
+                'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=15839135'],
+  bloomberg:   ['https://feeds.bloomberg.com/markets/news.rss',
+                'https://feeds.bloomberg.com/politics/news.rss',
+                'https://feeds.bloomberg.com/technology/news.rss'],
+  ft:          ['https://www.ft.com/rss/home/uk']
 };
 
 async function loadFeed(key) {
@@ -1156,60 +1188,110 @@ function renderArch(data, imgs) {
 
 // Fetch up to 3 images for a building from Wikipedia's public API.
 // Strategy:
-//   1. Query the REST summary endpoint for the building name → gets lead article image
-//   2. Query the Wikimedia Commons "search" API for additional images of the same subject
-//   3. Return up to 3 unique image URLs
+//   1. Wikipedia REST summary → lead article photo
+//   2. Wikipedia page images API → additional images from the article itself
+//   3. Wikimedia Commons search fallback → broader image search
 async function fetchWikiImages(buildingName, architectName) {
   var images = [];
+  var seenUrls = new Set();
 
-  // Helper: turn building name into a Wikipedia article slug
   function toSlug(name) {
     return encodeURIComponent(name.replace(/ /g, '_'));
   }
 
-  // 1. REST summary API — returns the article's lead photograph
-  try {
-    var summaryRes = await fetch(
-      'https://en.wikipedia.org/api/rest_v1/page/summary/' + toSlug(buildingName),
-      { headers: { 'Accept': 'application/json' } }
-    );
-    if (summaryRes.ok) {
-      var summaryData = await summaryRes.json();
-      // Prefer originalimage (full res) over thumbnail
-      var imgUrl = (summaryData.originalimage || summaryData.thumbnail || {}).source;
-      if (imgUrl) images.push({ url: imgUrl, caption: summaryData.title || buildingName });
-    }
-  } catch(e) { /* continue to next source */ }
+  function addImg(url, caption) {
+    if (!url || seenUrls.has(url)) return false;
+    // Skip icons, logos, flags (small files or SVGs)
+    if (url.indexOf('.svg') !== -1 || url.indexOf('Flag_of') !== -1 || url.indexOf('logo') !== -1) return false;
+    seenUrls.add(url);
+    images.push({ url: url, caption: caption || '' });
+    return true;
+  }
 
-  // 2. Wikimedia Commons search API — finds more photos of the same subject
-  // Uses the action=query&generator=search endpoint which is CORS-open
+  // 1. Wikipedia REST summary → lead photo
+  try {
+    var sr = await fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' + toSlug(buildingName),
+      { headers: { 'Accept': 'application/json' } });
+    if (sr.ok) {
+      var sd = await sr.json();
+      var imgUrl = (sd.originalimage || sd.thumbnail || {}).source;
+      addImg(imgUrl, sd.title || buildingName);
+    }
+  } catch(e) {}
+
+  // 2. Wikipedia page images API — gets all images used in the article (more reliable than Commons search)
   if (images.length < 3) {
     try {
-      var searchTerm = buildingName + ' ' + architectName;
-      var commonsUrl = 'https://commons.wikimedia.org/w/api.php?action=query' +
-        '&generator=search&gsrnamespace=6&gsrlimit=6' +
-        '&gsrsearch=' + encodeURIComponent(searchTerm) +
-        '&prop=imageinfo&iiprop=url|mime&iiurlwidth=900' +
-        '&format=json&origin=*';
-      var commonsRes = await fetch(commonsUrl);
-      if (commonsRes.ok) {
-        var commonsData = await commonsRes.json();
-        var pages = (commonsData.query || {}).pages || {};
-        Object.values(pages).forEach(function(page) {
-          if (images.length >= 3) return;
-          var info = (page.imageinfo || [])[0];
-          if (!info) return;
-          // Only use JPEGs and PNGs, skip SVGs/logos
-          if (info.mime && (info.mime === 'image/jpeg' || info.mime === 'image/png')) {
-            var url = info.thumburl || info.url;
-            // Deduplicate
-            if (url && !images.some(function(im) { return im.url === url; })) {
-              images.push({ url: url, caption: '' });
+      var piUrl = 'https://en.wikipedia.org/w/api.php?action=query&titles=' + toSlug(buildingName) +
+        '&prop=images&imlimit=15&format=json&origin=*';
+      var pir = await fetch(piUrl);
+      if (pir.ok) {
+        var pid = await pir.json();
+        var pages = Object.values((pid.query || {}).pages || {});
+        if (pages.length) {
+          var imgTitles = (pages[0].images || [])
+            .map(function(i) { return i.title; })
+            .filter(function(t) { return /\.(jpg|jpeg|png)/i.test(t) && !/flag|logo|icon|map|coat|seal/i.test(t); })
+            .slice(0, 6);
+          if (imgTitles.length) {
+            var infoUrl = 'https://en.wikipedia.org/w/api.php?action=query&titles=' +
+              imgTitles.map(function(t){ return encodeURIComponent(t); }).join('|') +
+              '&prop=imageinfo&iiprop=url|mime|size&iiurlwidth=900&format=json&origin=*';
+            var infor = await fetch(infoUrl);
+            if (infor.ok) {
+              var infod = await infor.json();
+              var infopages = Object.values((infod.query || {}).pages || {});
+              // Sort by file size descending so we pick the most substantial photos first
+              infopages.sort(function(a,b){
+                var sa = ((a.imageinfo||[])[0]||{}).size||0;
+                var sb = ((b.imageinfo||[])[0]||{}).size||0;
+                return sb - sa;
+              });
+              infopages.forEach(function(p) {
+                if (images.length >= 3) return;
+                var info = (p.imageinfo || [])[0];
+                if (!info) return;
+                if (info.mime === 'image/jpeg' || info.mime === 'image/png') {
+                  addImg(info.thumburl || info.url, '');
+                }
+              });
             }
           }
-        });
+        }
       }
-    } catch(e) { /* continue */ }
+    } catch(e) {}
+  }
+
+  // 3. Wikimedia Commons search as final fallback
+  if (images.length < 3) {
+    try {
+      var terms = [buildingName, buildingName + ' ' + architectName];
+      for (var t = 0; t < terms.length && images.length < 3; t++) {
+        var commonsUrl = 'https://commons.wikimedia.org/w/api.php?action=query' +
+          '&generator=search&gsrnamespace=6&gsrlimit=10' +
+          '&gsrsearch=' + encodeURIComponent(terms[t]) +
+          '&prop=imageinfo&iiprop=url|mime|size&iiurlwidth=900' +
+          '&format=json&origin=*';
+        var cr = await fetch(commonsUrl);
+        if (cr.ok) {
+          var cd = await cr.json();
+          var cpages = Object.values((cd.query || {}).pages || {});
+          cpages.sort(function(a,b){
+            var sa = ((a.imageinfo||[])[0]||{}).size||0;
+            var sb = ((b.imageinfo||[])[0]||{}).size||0;
+            return sb - sa;
+          });
+          cpages.forEach(function(p) {
+            if (images.length >= 3) return;
+            var info = (p.imageinfo || [])[0];
+            if (!info) return;
+            if (info.mime === 'image/jpeg' || info.mime === 'image/png') {
+              addImg(info.thumburl || info.url, '');
+            }
+          });
+        }
+      }
+    } catch(e) {}
   }
 
   return images.slice(0, 3);
@@ -1253,7 +1335,7 @@ async function loadAll() {
   loadArch();
   await Promise.all([
     loadEquities(), loadCrypto(), loadRates(),
-    loadFeed('cnbc'), loadFeed('bloomberg'), loadFeed('ft')
+    loadFeed('marketwatch'), loadFeed('cnbc'), loadFeed('bloomberg'), loadFeed('ft')
   ]);
   document.getElementById('rlabel').textContent =
     `Updated ${new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}`;
