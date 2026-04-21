@@ -205,8 +205,10 @@ var _tdPromise = null;
 
 function getTDData() {
   if (_tdPromise) return _tdPromise;
-  const syms = 'GOOGL,AMZN,AAPL,BRK.B,COIN,NVDA,QCOM,SPY';
-  _tdPromise = fetch(`https://api.twelvedata.com/time_series?symbol=${syms}&interval=1day&outputsize=32&apikey=${TD_KEY}`)
+  // ^FVX = 5Y Treasury, ^TNX = 10Y Treasury — added to same batch as equities
+  // Note: ^ must be encoded as %5E but commas must NOT be encoded
+  const syms = 'GOOGL,AMZN,AAPL,BRK.B,COIN,NVDA,QCOM,SPY,%5EFVX,%5ETNX';
+  _tdPromise = fetch('https://api.twelvedata.com/time_series?symbol=' + syms + '&interval=1day&outputsize=32&apikey=' + TD_KEY)
     .then(r => r.json())
     .catch(() => ({}));
   return _tdPromise;
@@ -271,55 +273,61 @@ async function loadCrypto() {
   }
 }
 
-// RATES — Pensford quotes.xml
+// RATES — Treasuries from Twelve Data, SOFR from Pensford
 async function loadRates() {
   const rows = document.getElementById('rate-rows');
   try {
-    const res = await fetch('https://19621209.fs1.hubspotusercontent-na1.net/hubfs/19621209/quotes.xml');
-    const text = await res.text();
-    const parser = new DOMParser();
-    const xml = parser.parseFromString(text, 'application/xml');
-    const ts = xml.documentElement.getAttribute('timeStamp') || '';
+    // ── Treasuries from Twelve Data (same batch as equities) ──
+    var y5 = null, y10 = null;
+    try {
+      var tdData = await getTDData();
+      var fvx = tdData['^FVX'];
+      var tnx = tdData['^TNX'];
+      if (fvx && fvx.values && fvx.values.length >= 2) {
+        var fvxNow  = parseFloat(fvx.values[0].close);
+        var fvxPrev = parseFloat(fvx.values[1].close);
+        y5 = { val: fvxNow, chg: (fvxNow - fvxPrev) * 100 }; // TD stores as percent e.g. 4.35, change * 100 = bps
+      }
+      if (tnx && tnx.values && tnx.values.length >= 2) {
+        var tnxNow  = parseFloat(tnx.values[0].close);
+        var tnxPrev = parseFloat(tnx.values[1].close);
+        y10 = { val: tnxNow, chg: (tnxNow - tnxPrev) * 100 };
+      }
+    } catch(e) {}
 
-    function getRecord(sym) {
+    // ── SOFR from Pensford quotes.xml ──
+    var sofr = null;
+    try {
+      var res = await fetch('https://19621209.fs1.hubspotusercontent-na1.net/hubfs/19621209/quotes.xml');
+      var text = await res.text();
+      var xml = new DOMParser().parseFromString(text, 'application/xml');
+      var ts = xml.documentElement.getAttribute('timeStamp') || '';
       var records = xml.querySelectorAll('record');
       for (var i = 0; i < records.length; i++) {
-        if (records[i].querySelector('symbol').textContent === sym) {
+        if (records[i].querySelector('symbol').textContent === 'SOFRTERM_M1') {
           var q = parseFloat(records[i].querySelector('quote').textContent);
           var c = parseFloat(records[i].querySelector('change').textContent);
-          // q is decimal e.g. 0.0435 = 4.35%, so *100 gives percent
-          // c is decimal e.g. 0.0005 = 0.05% = 5bps, so *100 gives percent, *10000 gives bps
-          return { val: q * 100, chg: c * 10000 };
+          sofr = { val: q * 100, chg: c * 10000 };
+          break;
         }
       }
-      return null;
+    } catch(e) {}
+
+    function rateRow(label, r) {
+      if (!r) return '<div class="rate-row"><div class="rate-top"><span class="rate-name">' + label + '</span><span class="rate-val">—</span></div></div>';
+      var cls  = r.chg >= 0 ? 'up' : 'down';
+      var sign = r.chg >= 0 ? '+' : '';
+      return '<div class="rate-row">' +
+        '<div class="rate-top"><span class="rate-name">' + label + '</span><span class="rate-val">' + r.val.toFixed(2) + '%</span></div>' +
+        '<div class="rate-changes"><span class="badge ' + cls + '"><span class="badge-label">1D</span>' + sign + r.chg.toFixed(1) + 'bps</span></div>' +
+        '</div>';
     }
 
-    var y5   = getRecord('TREASURY Y5');
-    var y10  = getRecord('TREASURY Y10');
-    var sofr = getRecord('SOFRTERM_M1');
-
-    var rateData = [
-      {label: '5Y Treasury',  r: y5},
-      {label: '10Y Treasury', r: y10},
-      {label: '1M Term SOFR', r: sofr}
-    ];
-
-    rows.innerHTML = rateData.map(function(item) {
-      var v = item.r;
-      if (!v) return '<div class="rate-row"><div class="rate-top"><span class="rate-name">' + item.label + '</span><span class="rate-val">—</span></div></div>';
-      var chgCls = v.chg >= 0 ? 'up' : 'down';
-      var sign   = v.chg >= 0 ? '+' : '';
-      return '<div class="rate-row">' +
-        '<div class="rate-top">' +
-          '<span class="rate-name">' + item.label + '</span>' +
-          '<span class="rate-val">' + v.val.toFixed(2) + '%</span>' +
-        '</div>' +
-        '<div class="rate-changes">' +
-          '<span class="badge ' + chgCls + '"><span class="badge-label">1D</span>' + sign + v.chg.toFixed(1) + 'bps</span>' +
-        '</div>' +
-      '</div>';
-    }).join('') + '<div class="rate-asof">As of ' + ts + ' · Pensford</div>';
+    rows.innerHTML =
+      rateRow('5Y Treasury',  y5) +
+      rateRow('10Y Treasury', y10) +
+      rateRow('1M Term SOFR', sofr) +
+      '<div class="rate-asof">Last trading day · Pensford / Twelve Data</div>';
 
   } catch(e) {
     rows.innerHTML = '<div class="err">Could not load rates.</div>';
