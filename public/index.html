@@ -34,11 +34,11 @@
   .arch-building-name { font-family:var(--serif); font-size:28px; font-weight:600; line-height:1.1; color:var(--text); margin-bottom:6px; }
   .arch-meta { font-size:11px; font-weight:300; color:var(--text3); letter-spacing:0.03em; margin-bottom:20px; }
   .arch-meta span { margin:0 6px; color:var(--border); }
-  .arch-images { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-bottom:22px; }
-  .arch-img-wrap { display:flex; flex-direction:column; gap:5px; }
-  .arch-img-wrap img { width:100%; height:140px; object-fit:cover; border-radius:2px; background:var(--bg); display:block; }
-  .arch-img-caption { font-size:9px; color:var(--text3); text-align:center; line-height:1.3; }
-  .arch-body { font-family:var(--serif); font-size:16px; line-height:1.8; color:#333; margin-bottom:20px; flex:1; }
+  .arch-images { margin-bottom:22px; display:flex; justify-content:center; }
+  .arch-img-wrap { width:100%; }
+  .arch-img-wrap img { width:100%; height:220px; object-fit:cover; border-radius:3px; background:var(--bg); display:block; }
+  .arch-img-caption { font-size:9px; color:var(--text3); text-align:center; line-height:1.3; margin-top:5px; }
+  .arch-body { font-family:var(--serif); font-size:16px; line-height:1.8; color:#333; margin-bottom:20px; }
   .arch-detail-label { font-size:9px; font-weight:600; color:var(--gold); letter-spacing:0.14em; text-transform:uppercase; margin-bottom:6px; }
   .arch-detail-text { font-family:var(--serif); font-style:italic; font-size:14.5px; line-height:1.7; color:#666; margin-bottom:24px; }
   .arch-footer { display:flex; align-items:center; justify-content:space-between; padding-top:16px; border-top:1px solid var(--border); }
@@ -285,10 +285,11 @@ async function loadRates() {
       var records = xml.querySelectorAll('record');
       for (var i = 0; i < records.length; i++) {
         if (records[i].querySelector('symbol').textContent === sym) {
-          return {
-            val: parseFloat(records[i].querySelector('quote').textContent) * 100,
-            chg: parseFloat(records[i].querySelector('change').textContent) * 100
-          };
+          var q = parseFloat(records[i].querySelector('quote').textContent);
+          var c = parseFloat(records[i].querySelector('change').textContent);
+          // q is decimal e.g. 0.0435 = 4.35%, so *100 gives percent
+          // c is decimal e.g. 0.0005 = 0.05% = 5bps, so *100 gives percent, *10000 gives bps
+          return { val: q * 100, chg: c * 10000 };
         }
       }
       return null;
@@ -315,7 +316,7 @@ async function loadRates() {
           '<span class="rate-val">' + v.val.toFixed(2) + '%</span>' +
         '</div>' +
         '<div class="rate-changes">' +
-          '<span class="badge ' + chgCls + '"><span class="badge-label">1D</span>' + sign + (v.chg * 100).toFixed(1) + 'bps</span>' +
+          '<span class="badge ' + chgCls + '"><span class="badge-label">1D</span>' + sign + v.chg.toFixed(1) + 'bps</span>' +
         '</div>' +
       '</div>';
     }).join('') + '<div class="rate-asof">As of ' + ts + ' · Pensford</div>';
@@ -1170,95 +1171,48 @@ function renderArch(data, imgs) {
 //   3. Wikimedia Commons search fallback → broader image search
 async function fetchWikiImages(buildingName, architectName) {
   var images = [];
-  var seenUrls = new Set();
 
-  function addImg(url, caption) {
-    if (!url || seenUrls.has(url)) return;
-    if (/\.svg|\.gif|\.pdf|flag_of|logo|icon|coat_of|seal_of|signature|map_of|location_map/i.test(url)) return;
-    seenUrls.add(url);
-    images.push({ url: url, caption: caption || '' });
-  }
-
-  async function resolveFilesToUrls(fileTitles) {
-    if (!fileTitles.length) return;
+  async function tryGetImage(title) {
     try {
-      var r = await fetch('https://commons.wikimedia.org/w/api.php?action=query' +
-        '&titles=' + fileTitles.slice(0, 10).map(encodeURIComponent).join('|') +
-        '&prop=imageinfo&iiprop=url|mime|size&iiurlwidth=800&format=json&origin=*');
-      if (!r.ok) return;
-      var d = await r.json();
-      var pages = Object.values((d.query || {}).pages || {});
-      pages.sort(function(a, b) {
-        return (((b.imageinfo||[])[0]||{}).size||0) - (((a.imageinfo||[])[0]||{}).size||0);
-      });
-      pages.forEach(function(p) {
-        if (images.length >= 3) return;
-        var info = (p.imageinfo || [])[0];
-        if (!info) return;
-        if (info.mime !== 'image/jpeg' && info.mime !== 'image/png') return;
-        if ((info.size || 0) < 50000) return;
-        addImg(info.thumburl || info.url, '');
-      });
-    } catch(e) {}
-  }
-
-  // Source 1: Commons category search — most reliable for correct building photos
-  try {
-    var catR = await fetch('https://commons.wikimedia.org/w/api.php?action=query' +
-      '&list=search&srnamespace=14&srsearch=' + encodeURIComponent(buildingName) +
-      '&srlimit=1&format=json&origin=*');
-    if (catR.ok) {
-      var catD = await catR.json();
-      var catHits = ((catD.query || {}).search || []);
-      if (catHits.length) {
-        var catTitle = catHits[0].title;
-        var memR = await fetch('https://commons.wikimedia.org/w/api.php?action=query' +
-          '&list=categorymembers&cmtitle=' + encodeURIComponent(catTitle) +
-          '&cmtype=file&cmlimit=10&format=json&origin=*');
-        if (memR.ok) {
-          var memD = await memR.json();
-          var fileTitles = ((memD.query || {}).categorymembers || []).map(function(m) { return m.title; });
-          await resolveFilesToUrls(fileTitles);
-        }
-      }
-    }
-  } catch(e) {}
-
-  // Source 2: Wikipedia REST summary — fast lead photo fallback
-  if (images.length < 1) {
-    try {
-      var slug = encodeURIComponent(buildingName.replace(/ /g, '_'));
-      var sr = await fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' + slug,
+      var r = await fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' +
+        encodeURIComponent(title.replace(/ /g, '_')),
         { headers: { 'Accept': 'application/json' } });
-      if (sr.ok) {
-        var sd = await sr.json();
-        addImg((sd.originalimage || sd.thumbnail || {}).source, buildingName);
-      }
+      if (!r.ok) return null;
+      var d = await r.json();
+      var url = (d.originalimage || d.thumbnail || {}).source;
+      if (url && !/\.svg/i.test(url)) return url;
     } catch(e) {}
+    return null;
   }
 
-  // Source 3: Commons text search fallback if still under 3
-  if (images.length < 3) {
+  async function searchWiki(query) {
     try {
-      var cr = await fetch('https://commons.wikimedia.org/w/api.php?action=query' +
-        '&generator=search&gsrnamespace=6&gsrlimit=30' +
-        '&gsrsearch=' + encodeURIComponent(buildingName) +
-        '&prop=imageinfo&iiprop=url|mime|size&iiurlwidth=800&format=json&origin=*');
-      if (cr.ok) {
-        var cd = await cr.json();
-        var cpages = Object.values((cd.query || {}).pages || {});
-        cpages.sort(function(a, b) {
-          return (((b.imageinfo||[])[0]||{}).size||0) - (((a.imageinfo||[])[0]||{}).size||0);
-        });
-        cpages.forEach(function(p) {
-          if (images.length >= 3) return;
-          var info = (p.imageinfo || [])[0];
-          if (!info || (info.mime !== 'image/jpeg' && info.mime !== 'image/png')) return;
-          if ((info.size || 0) < 50000) return;
-          addImg(info.thumburl || info.url, '');
-        });
-      }
-    } catch(e) {}
+      // Opensearch returns better fuzzy matches than list=search
+      var r = await fetch('https://en.wikipedia.org/w/api.php?action=opensearch&search=' +
+        encodeURIComponent(query) + '&limit=3&format=json&origin=*');
+      if (!r.ok) return [];
+      var d = await r.json();
+      return d[1] || []; // d[1] is array of title strings
+    } catch(e) { return []; }
+  }
+
+  // Try 1: exact building name slug
+  var url = await tryGetImage(buildingName);
+  if (url) { images.push({ url: url, caption: '' }); return images; }
+
+  // Try 2: opensearch with building name — tries fuzzy matches
+  var hits = await searchWiki(buildingName);
+  for (var i = 0; i < hits.length && images.length < 1; i++) {
+    url = await tryGetImage(hits[i]);
+    if (url) images.push({ url: url, caption: '' });
+  }
+  if (images.length) return images;
+
+  // Try 3: opensearch with building name + architect (helps disambiguate)
+  hits = await searchWiki(buildingName + ' ' + architectName);
+  for (var j = 0; j < hits.length && images.length < 1; j++) {
+    url = await tryGetImage(hits[j]);
+    if (url) images.push({ url: url, caption: '' });
   }
 
   return images;
