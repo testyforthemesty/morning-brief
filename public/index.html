@@ -199,7 +199,6 @@ setInterval(tick, 60000);
 // Equities (8 symbols) and treasury indices (2 symbols) are split into separate
 // fetches so neither batch exceeds the per-minute credit limit.
 var _tdPromise = null;
-var _tdTreasuryPromise = null;
 
 function _tdMakeCache(key, ttl) {
   return {
@@ -239,11 +238,35 @@ function getTDData() {
   return _tdPromise;
 }
 
-const _tdTrCache = _tdMakeCache('mb_td_tr', 24 * 60 * 60 * 1000);
-function getTDTreasury() {
-  if (_tdTreasuryPromise) return _tdTreasuryPromise;
-  _tdTreasuryPromise = _tdFetch('TNX,FVX', _tdTrCache);
-  return _tdTreasuryPromise;
+// Polygon.io — previous trading day close for treasury yield indices.
+// I:TNX / I:FVX report in CBOE tenths-of-a-percent (43.5 = 4.35%).
+const POLY_KEY = 'UNGccTZZfoza8bKLeLI7FzU6AxFPjHgV';
+var _polyPromises = {};
+
+function getPolygonPrev(ticker) {
+  if (_polyPromises[ticker]) return _polyPromises[ticker];
+  const lsKey = 'mb_poly_' + ticker;
+  try {
+    const raw = localStorage.getItem(lsKey);
+    if (raw) {
+      const { ts, val } = JSON.parse(raw);
+      if (Date.now() - ts < 8 * 60 * 60 * 1000) {
+        _polyPromises[ticker] = Promise.resolve(val);
+        return _polyPromises[ticker];
+      }
+    }
+  } catch {}
+  _polyPromises[ticker] = fetch(`https://api.polygon.io/v2/aggs/ticker/${ticker}/prev?adjusted=true&apiKey=${POLY_KEY}`)
+    .then(r => r.json())
+    .then(d => {
+      const val = d.results?.[0]?.c ?? null;
+      if (val !== null) {
+        try { localStorage.setItem(lsKey, JSON.stringify({ ts: Date.now(), val })); } catch {}
+      }
+      return val;
+    })
+    .catch(() => null);
+  return _polyPromises[ticker];
 }
 
 // EQUITIES
@@ -305,13 +328,14 @@ async function loadCrypto() {
   }
 }
 
-// RATES — Pensford for live values; TNX/FVX from Twelve Data for accurate 1D close-to-close change
+// RATES — Pensford for live values; Polygon prev close for accurate 1D bps change
 async function loadRates() {
   const rows = document.getElementById('rate-rows');
   try {
-    const [pensText, tdData] = await Promise.all([
+    const [pensText, tnxPrev, fvxPrev] = await Promise.all([
       fetch('https://19621209.fs1.hubspotusercontent-na1.net/hubfs/19621209/quotes.xml').then(r => r.text()),
-      getTDTreasury()
+      getPolygonPrev('I:TNX'),
+      getPolygonPrev('I:FVX')
     ]);
     const parser = new DOMParser();
     const xml = parser.parseFromString(pensText, 'application/xml');
@@ -321,22 +345,16 @@ async function loadRates() {
       const records = xml.querySelectorAll('record');
       for (let i = 0; i < records.length; i++) {
         if (records[i].querySelector('symbol').textContent === sym) {
-          return {
-            val: parseFloat(records[i].querySelector('quote').textContent) * 100,
-            chgBps: parseFloat(records[i].querySelector('change').textContent) * 10000
-          };
+          return { val: parseFloat(records[i].querySelector('quote').textContent) * 100 };
         }
       }
       return null;
     }
 
-    function tdBpsChange(sym) {
-      const d = tdData[sym];
-      if (!d || d.status === 'error' || !d.values || d.values.length < 2) return null;
-      const today = parseFloat(d.values[0].close);
-      const prev  = parseFloat(d.values[1].close);
-      // CBOE yield indices report in tenths-of-a-percent (e.g. 43.0 = 4.30%), so multiply by 10 for bps
-      return (today - prev) * 10;
+    // Polygon prev close is CBOE tenths-of-a-percent (43.5 = 4.35%); Pensford val is already in %
+    function polyBps(pensVal, polyPrev) {
+      if (polyPrev == null) return null;
+      return (pensVal - polyPrev / 10) * 100;
     }
 
     const y5   = getPensRecord('TREASURY Y5');
@@ -344,9 +362,9 @@ async function loadRates() {
     const sofr = getPensRecord('SOFRTERM_M1');
 
     const rates = [
-      { label: '5Y Treasury',  r: y5,   chg: tdBpsChange('FVX') ?? (y5   ? y5.chgBps   : null) },
-      { label: '10Y Treasury', r: y10,  chg: tdBpsChange('TNX') ?? (y10  ? y10.chgBps  : null) },
-      { label: '1M Term SOFR', r: sofr, chg: sofr ? sofr.chgBps : null }
+      { label: '5Y Treasury',  r: y5,   chg: y5  ? polyBps(y5.val,  fvxPrev) : null },
+      { label: '10Y Treasury', r: y10,  chg: y10 ? polyBps(y10.val, tnxPrev) : null },
+      { label: '1M Term SOFR', r: sofr, chg: null }
     ];
 
     rows.innerHTML = rates.map(function({ label, r, chg }) {
