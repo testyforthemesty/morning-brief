@@ -378,7 +378,7 @@ async function loadRates() {
         </div>
         ${chgHtml}
       </div>`;
-    }).join('') + `<div class="rate-asof">As of ${ts} · Pensford</div>`;
+    }).join('');
 
   } catch(e) {
     rows.innerHTML = '<div class="err">Could not load rates.</div>';
