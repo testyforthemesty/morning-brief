@@ -36,7 +36,7 @@
   .arch-meta span { margin:0 6px; color:var(--border); }
   .arch-images { margin-bottom:22px; display:flex; justify-content:center; }
   .arch-img-wrap { width:100%; }
-  .arch-img-wrap img { width:100%; height:220px; object-fit:cover; border-radius:3px; background:var(--bg); display:block; }
+  .arch-img-wrap img { width:100%; height:auto; max-height:320px; object-fit:contain; border-radius:3px; background:var(--bg); display:block; }
   .arch-img-caption { font-size:9px; color:var(--text3); text-align:center; line-height:1.3; margin-top:5px; }
   .arch-body { font-family:var(--serif); font-size:16px; line-height:1.8; color:#333; margin-bottom:20px; }
   .arch-detail-label { font-size:9px; font-weight:600; color:var(--gold); letter-spacing:0.14em; text-transform:uppercase; margin-bottom:6px; }
@@ -199,7 +199,7 @@ var _tdPromise = null;
 
 function getTDData() {
   if (_tdPromise) return _tdPromise;
-  const syms = 'GOOGL,AMZN,AAPL,BRK.B,COIN,NVDA,QCOM,SPY';
+  const syms = 'GOOGL,AMZN,AAPL,BRK.B,COIN,NVDA,QCOM,SPY,TNX,FVX';
   _tdPromise = fetch(`https://api.twelvedata.com/time_series?symbol=${syms}&interval=1day&outputsize=32&apikey=${TD_KEY}`)
     .then(r => r.json())
     .catch(() => ({}));
@@ -265,55 +265,65 @@ async function loadCrypto() {
   }
 }
 
-// RATES — Pensford quotes.xml (live intraday, updated every ~10 min, no auth needed)
+// RATES — Pensford for live values; TNX/FVX from Twelve Data for accurate 1D close-to-close change
 async function loadRates() {
   const rows = document.getElementById('rate-rows');
   try {
-    const res = await fetch('https://19621209.fs1.hubspotusercontent-na1.net/hubfs/19621209/quotes.xml');
-    const text = await res.text();
+    const [pensText, tdData] = await Promise.all([
+      fetch('https://19621209.fs1.hubspotusercontent-na1.net/hubfs/19621209/quotes.xml').then(r => r.text()),
+      getTDData()
+    ]);
     const parser = new DOMParser();
-    const xml = parser.parseFromString(text, 'application/xml');
+    const xml = parser.parseFromString(pensText, 'application/xml');
     const ts = xml.documentElement.getAttribute('timeStamp') || '';
 
-    function getRecord(sym) {
-      var records = xml.querySelectorAll('record');
-      for (var i = 0; i < records.length; i++) {
+    function getPensRecord(sym) {
+      const records = xml.querySelectorAll('record');
+      for (let i = 0; i < records.length; i++) {
         if (records[i].querySelector('symbol').textContent === sym) {
           return {
             val: parseFloat(records[i].querySelector('quote').textContent) * 100,
-            chg: parseFloat(records[i].querySelector('change').textContent) * 100,
-            date: records[i].querySelector('quoteDate').textContent
+            chgBps: parseFloat(records[i].querySelector('change').textContent) * 10000
           };
         }
       }
       return null;
     }
 
-    var y5   = getRecord('TREASURY Y5');
-    var y10  = getRecord('TREASURY Y10');
-    var sofr = getRecord('SOFRTERM_M1');
+    function tdBpsChange(sym) {
+      const d = tdData[sym];
+      if (!d || d.status === 'error' || !d.values || d.values.length < 2) return null;
+      const today = parseFloat(d.values[0].close);
+      const prev  = parseFloat(d.values[1].close);
+      // CBOE yield indices report in tenths-of-a-percent (e.g. 43.0 = 4.30%), so multiply by 10 for bps
+      return (today - prev) * 10;
+    }
 
-    var rateData = [
-      {label: '5Y Treasury',  r: y5},
-      {label: '10Y Treasury', r: y10},
-      {label: '1M Term SOFR', r: sofr}
+    const y5   = getPensRecord('TREASURY Y5');
+    const y10  = getPensRecord('TREASURY Y10');
+    const sofr = getPensRecord('SOFRTERM_M1');
+
+    const rates = [
+      { label: '5Y Treasury',  r: y5,   chg: tdBpsChange('FVX') ?? (y5   ? y5.chgBps   : null) },
+      { label: '10Y Treasury', r: y10,  chg: tdBpsChange('TNX') ?? (y10  ? y10.chgBps  : null) },
+      { label: '1M Term SOFR', r: sofr, chg: sofr ? sofr.chgBps : null }
     ];
 
-    rows.innerHTML = rateData.map(function(item) {
-      var v = item.r;
-      if (!v) return '<div class="rate-row"><div class="rate-top"><span class="rate-name">' + item.label + '</span><span class="rate-val">—</span></div></div>';
-      var chgCls = v.chg >= 0 ? 'up' : 'down';
-      var sign   = v.chg >= 0 ? '+' : '';
-      return '<div class="rate-row">' +
-        '<div class="rate-top">' +
-          '<span class="rate-name">' + item.label + '</span>' +
-          '<span class="rate-val">' + v.val.toFixed(2) + '%</span>' +
-        '</div>' +
-        '<div class="rate-changes">' +
-          '<span class="badge ' + chgCls + '"><span class="badge-label">1D</span>' + sign + (v.chg * 100).toFixed(1) + 'bps</span>' +
-        '</div>' +
-      '</div>';
-    }).join('') + '<div class="rate-asof">As of ' + ts + ' · Pensford</div>';
+    rows.innerHTML = rates.map(function({ label, r, chg }) {
+      if (!r) return `<div class="rate-row"><div class="rate-top"><span class="rate-name">${label}</span><span class="rate-val">—</span></div></div>`;
+      const cls  = (chg == null || chg >= 0) ? 'up' : 'down';
+      const sign = (chg == null || chg >= 0) ? '+' : '';
+      const chgHtml = chg != null
+        ? `<div class="rate-changes"><span class="badge ${cls}"><span class="badge-label">1D</span>${sign}${chg.toFixed(1)}bps</span></div>`
+        : '';
+      return `<div class="rate-row">
+        <div class="rate-top">
+          <span class="rate-name">${label}</span>
+          <span class="rate-val">${r.val.toFixed(2)}%</span>
+        </div>
+        ${chgHtml}
+      </div>`;
+    }).join('') + `<div class="rate-asof">As of ${ts} · Pensford</div>`;
 
   } catch(e) {
     rows.innerHTML = '<div class="err">Could not load rates.</div>';
