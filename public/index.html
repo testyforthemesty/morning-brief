@@ -195,42 +195,78 @@ function tick() {
 tick();
 setInterval(tick, 60000);
 
-// Shared Twelve Data result — fetched once, used by both equities and rates
+// Twelve Data free plan: 8 API credits/min, 1 credit per symbol per request.
+// Equities (8 symbols) and treasury indices (2 symbols) are split into separate
+// fetches so neither batch exceeds the per-minute credit limit.
 var _tdPromise = null;
-const TD_CACHE_KEY = 'mb_td_cache';
-const TD_CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
 
-function getTDCache() {
-  try {
-    const raw = localStorage.getItem(TD_CACHE_KEY);
-    if (!raw) return null;
-    const { ts, data } = JSON.parse(raw);
-    if (Date.now() - ts > TD_CACHE_TTL) return null;
-    return data;
-  } catch { return null; }
+function _tdMakeCache(key, ttl) {
+  return {
+    get() {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return null;
+        const { ts, data } = JSON.parse(raw);
+        return Date.now() - ts > ttl ? null : data;
+      } catch { return null; }
+    },
+    set(data) {
+      try { localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data })); } catch {}
+    }
+  };
 }
 
-function setTDCache(data) {
-  try { localStorage.setItem(TD_CACHE_KEY, JSON.stringify({ ts: Date.now(), data })); } catch {}
-}
-
-function getTDData() {
-  if (_tdPromise) return _tdPromise;
-  const syms = 'GOOGL,AMZN,AAPL,BRK.B,COIN,NVDA,QCOM,SPY,TNX,FVX';
-  _tdPromise = fetch(`https://api.twelvedata.com/time_series?symbol=${syms}&interval=1day&outputsize=32&apikey=${TD_KEY}`)
+function _tdFetch(syms, cache) {
+  return fetch(`https://api.twelvedata.com/time_series?symbol=${syms}&interval=1day&outputsize=32&apikey=${TD_KEY}`)
     .then(r => r.json())
     .then(data => {
-      // rate-limited or API error — fall back to cache
       if (data.code || data.status === 'error') {
-        const cached = getTDCache();
+        const cached = cache.get();
         if (cached) return cached;
         throw new Error(data.message || 'API error');
       }
-      setTDCache(data);
+      cache.set(data);
       return data;
     })
-    .catch(() => getTDCache() || {});
+    .catch(() => cache.get() || {});
+}
+
+const _tdEqCache = _tdMakeCache('mb_td_eq', 4 * 60 * 60 * 1000);
+function getTDData() {
+  if (_tdPromise) return _tdPromise;
+  _tdPromise = _tdFetch('GOOGL,AMZN,AAPL,BRK.B,COIN,NVDA,QCOM,SPY', _tdEqCache);
   return _tdPromise;
+}
+
+// Polygon.io — previous trading day close for treasury yield indices.
+// I:TNX / I:FVX report in CBOE tenths-of-a-percent (43.5 = 4.35%).
+const POLY_KEY = 'UNGccTZZfoza8bKLeLI7FzU6AxFPjHgV';
+var _polyPromises = {};
+
+function getPolygonPrev(ticker) {
+  if (_polyPromises[ticker]) return _polyPromises[ticker];
+  const lsKey = 'mb_poly_' + ticker;
+  try {
+    const raw = localStorage.getItem(lsKey);
+    if (raw) {
+      const { ts, val } = JSON.parse(raw);
+      if (Date.now() - ts < 8 * 60 * 60 * 1000) {
+        _polyPromises[ticker] = Promise.resolve(val);
+        return _polyPromises[ticker];
+      }
+    }
+  } catch {}
+  _polyPromises[ticker] = fetch(`https://api.polygon.io/v2/aggs/ticker/${ticker}/prev?adjusted=true&apiKey=${POLY_KEY}`)
+    .then(r => r.json())
+    .then(d => {
+      const val = d.results?.[0]?.c ?? null;
+      if (val !== null) {
+        try { localStorage.setItem(lsKey, JSON.stringify({ ts: Date.now(), val })); } catch {}
+      }
+      return val;
+    })
+    .catch(() => null);
+  return _polyPromises[ticker];
 }
 
 // EQUITIES
@@ -292,13 +328,14 @@ async function loadCrypto() {
   }
 }
 
-// RATES — Pensford for live values; TNX/FVX from Twelve Data for accurate 1D close-to-close change
+// RATES — Pensford for live values; Polygon prev close for accurate 1D bps change
 async function loadRates() {
   const rows = document.getElementById('rate-rows');
   try {
-    const [pensText, tdData] = await Promise.all([
+    const [pensText, tnxPrev, fvxPrev] = await Promise.all([
       fetch('https://19621209.fs1.hubspotusercontent-na1.net/hubfs/19621209/quotes.xml').then(r => r.text()),
-      getTDData()
+      getPolygonPrev('I:TNX'),
+      getPolygonPrev('I:FVX')
     ]);
     const parser = new DOMParser();
     const xml = parser.parseFromString(pensText, 'application/xml');
@@ -308,22 +345,16 @@ async function loadRates() {
       const records = xml.querySelectorAll('record');
       for (let i = 0; i < records.length; i++) {
         if (records[i].querySelector('symbol').textContent === sym) {
-          return {
-            val: parseFloat(records[i].querySelector('quote').textContent) * 100,
-            chgBps: parseFloat(records[i].querySelector('change').textContent) * 10000
-          };
+          return { val: parseFloat(records[i].querySelector('quote').textContent) * 100 };
         }
       }
       return null;
     }
 
-    function tdBpsChange(sym) {
-      const d = tdData[sym];
-      if (!d || d.status === 'error' || !d.values || d.values.length < 2) return null;
-      const today = parseFloat(d.values[0].close);
-      const prev  = parseFloat(d.values[1].close);
-      // CBOE yield indices report in tenths-of-a-percent (e.g. 43.0 = 4.30%), so multiply by 10 for bps
-      return (today - prev) * 10;
+    // Polygon prev close is CBOE tenths-of-a-percent (43.5 = 4.35%); Pensford val is already in %
+    function polyBps(pensVal, polyPrev) {
+      if (polyPrev == null) return null;
+      return (pensVal - polyPrev / 10) * 100;
     }
 
     const y5   = getPensRecord('TREASURY Y5');
@@ -331,9 +362,9 @@ async function loadRates() {
     const sofr = getPensRecord('SOFRTERM_M1');
 
     const rates = [
-      { label: '5Y Treasury',  r: y5,   chg: tdBpsChange('FVX') ?? (y5   ? y5.chgBps   : null) },
-      { label: '10Y Treasury', r: y10,  chg: tdBpsChange('TNX') ?? (y10  ? y10.chgBps  : null) },
-      { label: '1M Term SOFR', r: sofr, chg: sofr ? sofr.chgBps : null }
+      { label: '5Y Treasury',  r: y5,   chg: y5  ? polyBps(y5.val,  fvxPrev) : null },
+      { label: '10Y Treasury', r: y10,  chg: y10 ? polyBps(y10.val, tnxPrev) : null },
+      { label: '1M Term SOFR', r: sofr, chg: null }
     ];
 
     rows.innerHTML = rates.map(function({ label, r, chg }) {
