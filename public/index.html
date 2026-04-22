@@ -238,35 +238,33 @@ function getTDData() {
   return _tdPromise;
 }
 
-// Polygon.io — previous trading day close for treasury yield indices.
-// I:TNX / I:FVX report in CBOE tenths-of-a-percent (43.5 = 4.35%).
-const POLY_KEY = 'UNGccTZZfoza8bKLeLI7FzU6AxFPjHgV';
-var _polyPromises = {};
+// Treasury previous close via Vercel serverless proxy → FRED (Federal Reserve).
+// Values in percent (4.35 = 4.35%). Cached 8hrs in localStorage.
+var _treasuryPromise = null;
 
-function getPolygonPrev(ticker) {
-  if (_polyPromises[ticker]) return _polyPromises[ticker];
-  const lsKey = 'mb_poly_' + ticker;
+function getTreasuryPrev() {
+  if (_treasuryPromise) return _treasuryPromise;
+  const lsKey = 'mb_treasury_prev';
   try {
     const raw = localStorage.getItem(lsKey);
     if (raw) {
-      const { ts, val } = JSON.parse(raw);
+      const { ts, data } = JSON.parse(raw);
       if (Date.now() - ts < 8 * 60 * 60 * 1000) {
-        _polyPromises[ticker] = Promise.resolve(val);
-        return _polyPromises[ticker];
+        _treasuryPromise = Promise.resolve(data);
+        return _treasuryPromise;
       }
     }
   } catch {}
-  _polyPromises[ticker] = fetch(`https://api.polygon.io/v2/aggs/ticker/${ticker}/prev?adjusted=true&apiKey=${POLY_KEY}`)
+  _treasuryPromise = fetch('/api/treasury')
     .then(r => r.json())
     .then(d => {
-      const val = d.results?.[0]?.c ?? null;
-      if (val !== null) {
-        try { localStorage.setItem(lsKey, JSON.stringify({ ts: Date.now(), val })); } catch {}
+      if (d.dgs5 != null || d.dgs10 != null) {
+        try { localStorage.setItem(lsKey, JSON.stringify({ ts: Date.now(), data: d })); } catch {}
       }
-      return val;
+      return d;
     })
-    .catch(() => null);
-  return _polyPromises[ticker];
+    .catch(() => ({}));
+  return _treasuryPromise;
 }
 
 // EQUITIES
@@ -328,14 +326,13 @@ async function loadCrypto() {
   }
 }
 
-// RATES — Pensford for live values; Polygon prev close for accurate 1D bps change
+// RATES — Pensford for live values; /api/treasury (FRED proxy) for 1D bps change
 async function loadRates() {
   const rows = document.getElementById('rate-rows');
   try {
-    const [pensText, tnxPrev, fvxPrev] = await Promise.all([
+    const [pensText, tPrev] = await Promise.all([
       fetch('https://19621209.fs1.hubspotusercontent-na1.net/hubfs/19621209/quotes.xml').then(r => r.text()),
-      getPolygonPrev('I:TNX'),
-      getPolygonPrev('I:FVX')
+      getTreasuryPrev()
     ]);
     const parser = new DOMParser();
     const xml = parser.parseFromString(pensText, 'application/xml');
@@ -351,10 +348,10 @@ async function loadRates() {
       return null;
     }
 
-    // Polygon prev close is CBOE tenths-of-a-percent (43.5 = 4.35%); Pensford val is already in %
-    function polyBps(pensVal, polyPrev) {
-      if (polyPrev == null) return null;
-      return (pensVal - polyPrev / 10) * 100;
+    // FRED values are in percent (4.35 = 4.35%); Pensford val is also in %
+    function fredBps(pensVal, fredPrev) {
+      if (fredPrev == null) return null;
+      return (pensVal - fredPrev) * 100;
     }
 
     const y5   = getPensRecord('TREASURY Y5');
@@ -362,8 +359,8 @@ async function loadRates() {
     const sofr = getPensRecord('SOFRTERM_M1');
 
     const rates = [
-      { label: '5Y Treasury',  r: y5,   chg: y5  ? polyBps(y5.val,  fvxPrev) : null },
-      { label: '10Y Treasury', r: y10,  chg: y10 ? polyBps(y10.val, tnxPrev) : null },
+      { label: '5Y Treasury',  r: y5,   chg: y5  ? fredBps(y5.val,  tPrev.dgs5)  : null },
+      { label: '10Y Treasury', r: y10,  chg: y10 ? fredBps(y10.val, tPrev.dgs10) : null },
       { label: '1M Term SOFR', r: sofr, chg: null }
     ];
 
