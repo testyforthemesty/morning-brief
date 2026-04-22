@@ -195,42 +195,55 @@ function tick() {
 tick();
 setInterval(tick, 60000);
 
-// Shared Twelve Data result — fetched once, used by both equities and rates
+// Twelve Data free plan: 8 API credits/min, 1 credit per symbol per request.
+// Equities (8 symbols) and treasury indices (2 symbols) are split into separate
+// fetches so neither batch exceeds the per-minute credit limit.
 var _tdPromise = null;
-const TD_CACHE_KEY = 'mb_td_cache';
-const TD_CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
+var _tdTreasuryPromise = null;
 
-function getTDCache() {
-  try {
-    const raw = localStorage.getItem(TD_CACHE_KEY);
-    if (!raw) return null;
-    const { ts, data } = JSON.parse(raw);
-    if (Date.now() - ts > TD_CACHE_TTL) return null;
-    return data;
-  } catch { return null; }
+function _tdMakeCache(key, ttl) {
+  return {
+    get() {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return null;
+        const { ts, data } = JSON.parse(raw);
+        return Date.now() - ts > ttl ? null : data;
+      } catch { return null; }
+    },
+    set(data) {
+      try { localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data })); } catch {}
+    }
+  };
 }
 
-function setTDCache(data) {
-  try { localStorage.setItem(TD_CACHE_KEY, JSON.stringify({ ts: Date.now(), data })); } catch {}
-}
-
-function getTDData() {
-  if (_tdPromise) return _tdPromise;
-  const syms = 'GOOGL,AMZN,AAPL,BRK.B,COIN,NVDA,QCOM,SPY,TNX,FVX';
-  _tdPromise = fetch(`https://api.twelvedata.com/time_series?symbol=${syms}&interval=1day&outputsize=32&apikey=${TD_KEY}`)
+function _tdFetch(syms, cache) {
+  return fetch(`https://api.twelvedata.com/time_series?symbol=${syms}&interval=1day&outputsize=32&apikey=${TD_KEY}`)
     .then(r => r.json())
     .then(data => {
-      // rate-limited or API error — fall back to cache
       if (data.code || data.status === 'error') {
-        const cached = getTDCache();
+        const cached = cache.get();
         if (cached) return cached;
         throw new Error(data.message || 'API error');
       }
-      setTDCache(data);
+      cache.set(data);
       return data;
     })
-    .catch(() => getTDCache() || {});
+    .catch(() => cache.get() || {});
+}
+
+const _tdEqCache = _tdMakeCache('mb_td_eq', 4 * 60 * 60 * 1000);
+function getTDData() {
+  if (_tdPromise) return _tdPromise;
+  _tdPromise = _tdFetch('GOOGL,AMZN,AAPL,BRK.B,COIN,NVDA,QCOM,SPY', _tdEqCache);
   return _tdPromise;
+}
+
+const _tdTrCache = _tdMakeCache('mb_td_tr', 24 * 60 * 60 * 1000);
+function getTDTreasury() {
+  if (_tdTreasuryPromise) return _tdTreasuryPromise;
+  _tdTreasuryPromise = _tdFetch('TNX,FVX', _tdTrCache);
+  return _tdTreasuryPromise;
 }
 
 // EQUITIES
@@ -298,7 +311,7 @@ async function loadRates() {
   try {
     const [pensText, tdData] = await Promise.all([
       fetch('https://19621209.fs1.hubspotusercontent-na1.net/hubfs/19621209/quotes.xml').then(r => r.text()),
-      getTDData()
+      getTDTreasury()
     ]);
     const parser = new DOMParser();
     const xml = parser.parseFromString(pensText, 'application/xml');
