@@ -15,7 +15,7 @@
     -webkit-font-smoothing:antialiased;
     font-feature-settings:"ss01","cv11";
   }
-  #root { width:100%; max-width:1400px; height:100vh; display:flex; flex-direction:column; }
+  #root { width:100%; max-width:1680px; height:100vh; display:flex; flex-direction:column; }
 
   .qt {
     --ink:#202123; --ink-2:#353740;
@@ -64,6 +64,7 @@
     display:flex; flex-direction:column; gap:6px;
     flex-shrink:0;
   }
+  .qt-intro__toprow { display:flex; justify-content:space-between; align-items:baseline; }
   .qt-intro__date { font-size:11px; color:var(--muted); display:flex; gap:6px; }
   .qt-intro__sep { color:var(--muted-2); }
   .qt-intro__quote {
@@ -137,15 +138,8 @@
     display:grid; grid-template-columns:1.15fr 1fr;
     gap:40px; flex:1; min-height:0;
   }
-  .qt-feature {
-    overflow-y:auto; padding-bottom:16px;
-    scrollbar-width:thin; scrollbar-color:var(--line) transparent;
-  }
-  .qt-side {
-    display:flex; flex-direction:column;
-    overflow-y:auto; padding-bottom:16px;
-    scrollbar-width:thin; scrollbar-color:var(--line) transparent;
-  }
+  .qt-feature { padding-bottom:16px; }
+  .qt-side { display:flex; flex-direction:column; padding-bottom:16px; }
 
   /* FEATURE (architecture) */
   .qt-feature__fig { margin:0 0 10px; }
@@ -276,22 +270,14 @@
 <div id="root">
 <div class="qt">
 
-  <header class="qt-nav">
-    <div class="qt-nav__brand">
-      <span class="qt-mark" aria-hidden="true"></span>
-      <span class="qt-brand">Morning Brief</span>
-    </div>
-    <div></div>
-    <div class="qt-nav__meta">
-      <span class="qt-live"><span class="qt-live__dot"></span> <span id="rlabel">Loading…</span></span>
-    </div>
-  </header>
-
   <section class="qt-intro">
-    <div class="qt-intro__date">
-      <span id="top-date-weekday"></span>
-      <span class="qt-intro__sep">·</span>
-      <span id="top-date-long"></span>
+    <div class="qt-intro__toprow">
+      <div class="qt-intro__date">
+        <span id="top-date-weekday"></span>
+        <span class="qt-intro__sep">·</span>
+        <span id="top-date-long"></span>
+      </div>
+      <span class="qt-live"><span class="qt-live__dot"></span> <span id="rlabel">Loading…</span></span>
     </div>
     <div class="qt-intro__quote">
       <span class="qt-intro__qmark">"</span><span id="quote-text"></span>
@@ -301,13 +287,7 @@
 
   <div class="qt-hr"></div>
 
-  <section class="qt-sec">
-    <div class="qt-sechead">
-      <h2 class="qt-sechead__t">Markets</h2>
-      <span class="qt-sechead__m">Equities · USD</span>
-    </div>
-    <div class="qt-eq" id="eq-grid"><div class="qt-loading" style="padding:16px">Loading…</div></div>
-  </section>
+  <div class="qt-eq" id="eq-grid" style="margin-bottom:12px"><div class="qt-loading" style="padding:16px">Loading…</div></div>
 
   <div class="qt-grid">
 
@@ -609,7 +589,7 @@ async function loadFeed(key) {
     }));
     const items = all.flat().sort(function(a, b) {
       return new Date(b.pubDate) - new Date(a.pubDate);
-    }).slice(0, 6);
+    }).slice(0, 4);
     if (!items.length) throw new Error('no items');
     const source = key[0].toUpperCase() + key.slice(1).toLowerCase();
     el.innerHTML = '<ol class="qt-news">' + items.map(function(item) {
