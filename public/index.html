@@ -412,32 +412,79 @@ function getTDData() {
   return _tdPromise;
 }
 
-// Treasury previous close via Vercel serverless proxy → FRED (Federal Reserve).
-// Values in percent (4.35 = 4.35%). Cached 8hrs in localStorage.
+// Treasury rates via US Treasury XML feed + 30-day avg SOFR from NY Fed.
+// Cache 30 min so intraday moves show up.
 var _treasuryPromise = null;
 
-function getTreasuryPrev() {
+function getTreasuryData() {
   if (_treasuryPromise) return _treasuryPromise;
-  const lsKey = 'mb_treasury_prev';
+  const lsKey = 'mb_treasury_v3';
   try {
     const raw = localStorage.getItem(lsKey);
     if (raw) {
       const { ts, data } = JSON.parse(raw);
-      if (Date.now() - ts < 8 * 60 * 60 * 1000) {
+      if (Date.now() - ts < 30 * 60 * 1000) {
         _treasuryPromise = Promise.resolve(data);
         return _treasuryPromise;
       }
     }
   } catch {}
-  _treasuryPromise = fetch('/api/treasury')
-    .then(r => r.json())
-    .then(d => {
-      if (d.dgs5 != null || d.dgs10 != null) {
-        try { localStorage.setItem(lsKey, JSON.stringify({ ts: Date.now(), data: d })); } catch {}
-      }
-      return d;
-    })
-    .catch(() => ({}));
+
+  // 1) US Treasury XML for 5Y + 10Y yields
+  const now = new Date();
+  const ym = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}`;
+  const tsvUrl = `https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value=${ym}`;
+
+  // 2) NY Fed 30-day avg SOFR JSON (no API key, public)
+  const sofrUrl = 'https://markets.newyorkfed.org/api/rates/sofr/30/averages.json';
+
+  _treasuryPromise = Promise.all([
+    fetch(tsvUrl).then(r => r.text()).catch(() => ''),
+    fetch(sofrUrl).then(r => r.json()).catch(() => null)
+  ])
+  .then(([tsvTxt, sofrJson]) => {
+    // --- parse treasuries ---
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(tsvTxt, 'application/xml');
+    const entries = xml.querySelectorAll('entry');
+
+    function getVal(entry, tag) {
+      const el = entry.querySelector(`BC_${tag}`);
+      return el ? parseFloat(el.textContent) : null;
+    }
+
+    const rows = [];
+    entries.forEach(e => {
+      const y5  = getVal(e, '5YEAR');
+      const y10 = getVal(e, '10YEAR');
+      if (y5 != null && y10 != null) rows.push({ y5, y10 });
+    });
+
+    const today = rows[0] || {};
+    const prev  = rows[1] || rows[0] || {};
+
+    // --- parse SOFR ---
+    let sofr = null, sofrPrev = null;
+    try {
+      const rateList = sofrJson.refRates || [];
+      if (rateList.length > 0) sofr     = parseFloat(rateList[0].percentRate);
+      if (rateList.length > 1) sofrPrev = parseFloat(rateList[1].percentRate);
+    } catch {}
+
+    const data = {
+      y5:       today.y5   ?? null,
+      y10:      today.y10  ?? null,
+      y5Prev:   prev.y5    ?? null,
+      y10Prev:  prev.y10   ?? null,
+      sofr,
+      sofrPrev
+    };
+
+    try { localStorage.setItem(lsKey, JSON.stringify({ ts: Date.now(), data })); } catch {}
+    return data;
+  })
+  .catch(() => null);
+
   return _treasuryPromise;
 }
 
@@ -508,55 +555,35 @@ async function loadCrypto() {
   }
 }
 
-// RATES — Pensford for live values; /api/treasury (FRED proxy) for 1D bps change
+// RATES — US Treasury XML feed for live values + 1D bps change
 async function loadRates() {
   const rows = document.getElementById('rate-rows');
   try {
-    const [pensText, tPrev] = await Promise.all([
-      fetch('https://19621209.fs1.hubspotusercontent-na1.net/hubfs/19621209/quotes.xml').then(r => r.text()),
-      getTreasuryPrev()
-    ]);
-    const parser = new DOMParser();
-    const xml = parser.parseFromString(pensText, 'application/xml');
-    const ts = xml.documentElement.getAttribute('timeStamp') || '';
+    const t = await getTreasuryData();
+    if (!t) throw new Error('no data');
 
-    function getPensRecord(sym) {
-      const records = xml.querySelectorAll('record');
-      for (let i = 0; i < records.length; i++) {
-        if (records[i].querySelector('symbol').textContent === sym) {
-          return { val: parseFloat(records[i].querySelector('quote').textContent) * 100 };
-        }
-      }
-      return null;
+    function bps(cur, prev) {
+      if (cur == null || prev == null) return null;
+      return (cur - prev) * 100;
     }
-
-    // FRED values are in percent (4.35 = 4.35%); Pensford val is also in %
-    function fredBps(pensVal, fredPrev) {
-      if (fredPrev == null) return null;
-      return (pensVal - fredPrev) * 100;
-    }
-
-    const y5   = getPensRecord('TREASURY Y5');
-    const y10  = getPensRecord('TREASURY Y10');
-    const sofr = getPensRecord('SOFRTERM_M1');
 
     const rates = [
-      { label: '5Y Treasury',  r: y5,   chg: y5  ? fredBps(y5.val,  tPrev.dgs5)  : null },
-      { label: '10Y Treasury', r: y10,  chg: y10 ? fredBps(y10.val, tPrev.dgs10) : null },
-      { label: '1M Term SOFR', r: sofr, chg: null }
+      { label: '5Y Treasury',  val: t.y5,   chg: bps(t.y5,   t.y5Prev)   },
+      { label: '10Y Treasury', val: t.y10,  chg: bps(t.y10,  t.y10Prev)  },
+      { label: '30D Avg SOFR', val: t.sofr, chg: bps(t.sofr, t.sofrPrev) },
     ];
 
-    rows.innerHTML = rates.map(function({ label, r, chg }) {
-      if (!r) return `<li><div class="qt-rates__lbl">${label}</div><div class="qt-rates__row"><span class="qt-rates__val">—</span></div></li>`;
+    rows.innerHTML = rates.map(function({ label, val, chg }) {
+      if (val == null) return `<li><div class="qt-rates__lbl">${label}</div><div class="qt-rates__row"><span class="qt-rates__val">—</span></div></li>`;
       const cls  = (chg == null || chg >= 0) ? 'up' : 'dn';
-      const sign = (chg == null || chg >= 0) ? '+' : '';
+      const sign = (chg != null && chg >= 0) ? '+' : '';
       const chgHtml = chg != null
         ? `<span class="qt-rates__d ${cls}">${sign}${chg.toFixed(1)}bps</span>`
         : '';
       return `<li>
         <div class="qt-rates__lbl">${label}</div>
         <div class="qt-rates__row">
-          <span class="qt-rates__val">${r.val.toFixed(2)}%</span>
+          <span class="qt-rates__val">${val.toFixed(2)}%</span>
           ${chgHtml}
         </div>
       </li>`;
