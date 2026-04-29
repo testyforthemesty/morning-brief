@@ -417,7 +417,7 @@ var _treasuryPromise = null;
 
 function getTreasuryData() {
   if (_treasuryPromise) return _treasuryPromise;
-  const lsKey = 'mb_treasury_v3';
+  const lsKey = 'mb_treasury_v4';
   try {
     const raw = localStorage.getItem(lsKey);
     if (raw) {
