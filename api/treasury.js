@@ -1,28 +1,45 @@
-// api/treasury.js
-// Fetches previous trading day's official treasury yields from FRED (Federal Reserve).
-// Runs server-side on Vercel so there are no browser CORS restrictions.
-// Returns { dgs5: 4.35, dgs10: 4.40 } — values in percent.
-
+// Live treasury yields from Yahoo Finance (^FVX = 5Y, ^TNX = 10Y)
+// 30D avg SOFR from NY Fed. Runs server-side to avoid CORS.
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   if (req.method === 'OPTIONS') return res.status(200).end();
-  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.setHeader('Cache-Control', 'public, max-age=1800');
 
-  async function fetchFred(series) {
-    const r = await fetch(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${series}`);
-    const text = await r.text();
-    const rows = text.trim().split('\n').slice(1);
-    for (let i = rows.length - 1; i >= 0; i--) {
-      const v = rows[i].split(',')[1]?.trim();
-      if (v && v !== '.') return parseFloat(v);
-    }
-    return null;
+  const YF_HEADERS = { 'User-Agent': 'Mozilla/5.0' };
+
+  async function fetchYF(symbol) {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
+    const r = await fetch(url, { headers: YF_HEADERS });
+    const j = await r.json();
+    const result = j?.chart?.result?.[0];
+    if (!result) return { cur: null, prev: null };
+    const closes = result.indicators?.quote?.[0]?.close ?? [];
+    const valid = closes.filter(v => v != null);
+    return {
+      cur:  result.meta.regularMarketPrice ?? valid[valid.length - 1] ?? null,
+      prev: valid[valid.length - 2] ?? null,
+    };
+  }
+
+  async function fetchSofr() {
+    const r = await fetch('https://markets.newyorkfed.org/api/rates/all/latest.json');
+    const j = await r.json();
+    const entry = (j.refRates || []).find(x => x.type === 'SOFRAI');
+    return entry?.average30day ?? null;
   }
 
   try {
-    const [dgs5, dgs10] = await Promise.all([fetchFred('DGS5'), fetchFred('DGS10')]);
-    return res.status(200).json({ dgs5, dgs10 });
+    const [y5, y10, sofr] = await Promise.all([
+      fetchYF('^FVX'),
+      fetchYF('^TNX'),
+      fetchSofr().catch(() => null),
+    ]);
+    return res.status(200).json({
+      y5: y5.cur,   y5Prev: y5.prev,
+      y10: y10.cur, y10Prev: y10.prev,
+      sofr,
+    });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
