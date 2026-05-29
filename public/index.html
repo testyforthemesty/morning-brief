@@ -144,10 +144,10 @@
   /* FEATURE (architecture) */
   .qt-feature__fig { margin:0 0 10px; }
   .qt-feature__img {
-    aspect-ratio:5/2.2; border-radius:8px;
+    border-radius:8px;
     overflow:hidden; background:#EFEAE1;
   }
-  .qt-feature__img img { width:100%; height:100%; object-fit:cover; display:block; }
+  .qt-feature__img img { width:100%; height:auto; max-height:520px; display:block; }
   .qt-feature__cap {
     font-family:'Source Serif 4',Georgia,serif;
     font-style:italic; font-size:11px; color:var(--muted);
@@ -1417,18 +1417,25 @@ async function fetchWikiImages(buildingName, architectName, city) {
   var url = await wikiPageImage(buildingName);
   if (url) return [{ url: url, caption: '' }];
 
-  // Tier 2: opensearch Wikipedia → pageimages (handles minor name differences)
-  var hits = await wikiSearch(buildingName + ' building');
+  // Tier 2: opensearch with architect name — much better disambiguation than "building"
+  var hits = await wikiSearch(buildingName + ' ' + architectName);
   for (var i = 0; i < hits.length; i++) {
     url = await wikiPageImage(hits[i]);
     if (url) return [{ url: url, caption: '' }];
   }
 
-  // Tier 3: Wikimedia Commons file search — best for architectural photos
-  var imgs = await commonsSearch(buildingName + ' ' + (city || ''));
+  // Tier 3: opensearch with city
+  hits = await wikiSearch(buildingName + ' ' + (city || ''));
+  for (var j = 0; j < hits.length; j++) {
+    url = await wikiPageImage(hits[j]);
+    if (url) return [{ url: url, caption: '' }];
+  }
+
+  // Tier 4: Wikimedia Commons file search — best for architectural photos
+  var imgs = await commonsSearch(buildingName + ' ' + architectName);
   if (imgs.length) return [imgs[0]];
 
-  imgs = await commonsSearch(buildingName + ' ' + architectName);
+  imgs = await commonsSearch(buildingName + ' ' + (city || ''));
   if (imgs.length) return [imgs[0]];
 
   return [];
