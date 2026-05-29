@@ -1455,13 +1455,14 @@ async function loadArch() {
 
   renderArch(data, []);
 
-  // Try /api/arch first — it has pre-curated images written by the Cowork job each morning
+  // Try /api/arch first — pre-curated images from the Cowork job, but only if the
+  // name matches today's building (the job may not have run yet for the day).
   var imgs = [];
   try {
     var archR = await fetch('/api/arch');
     if (archR.ok) {
       var archD = await archR.json();
-      if (Array.isArray(archD.images) && archD.images.length) {
+      if (archD.name === data.name && Array.isArray(archD.images) && archD.images.length) {
         imgs = archD.images.filter(function(img) { return img.url && !/\.svg/i.test(img.url); });
       }
     }
