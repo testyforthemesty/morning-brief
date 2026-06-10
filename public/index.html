@@ -296,7 +296,7 @@ function fmtPrice(n) {
 
 function pctCell(p) {
   p = parseFloat(p);
-  const cls = p >= 0 ? 'up' : 'dn', sign = p >= 0 ? '+' : '';
+  const cls = p >= 0 ? 'up' : 'dn', sign = p >= 0 ? '+' : '-';
   return `<span class="${cls}">${sign}${Math.abs(p).toFixed(2)}%</span>`;
 }
 
