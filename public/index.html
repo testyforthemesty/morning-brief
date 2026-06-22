@@ -348,7 +348,7 @@ function _tdFetch(syms, cache) {
 const _tdEqCache = _tdMakeCache('mb_td_eq', 4 * 60 * 60 * 1000);
 function getTDData() {
   if (_tdPromise) return _tdPromise;
-  _tdPromise = _tdFetch('GOOGL,AMZN,AAPL,BRK.B,COIN,NVDA,QCOM,SPY', _tdEqCache);
+  _tdPromise = _tdFetch('GOOGL,AMZN,AAPL,SPCX,COIN,NVDA,QCOM,SPY', _tdEqCache);
   return _tdPromise;
 }
 
@@ -370,7 +370,7 @@ async function loadEquities() {
   try {
     const data = await getTDData();
     if (data.code) throw new Error(data.message);
-    const order = ['GOOGL','AMZN','AAPL','BRK.B','COIN','NVDA','QCOM','SPY'];
+    const order = ['GOOGL','AMZN','AAPL','SPCX','COIN','NVDA','QCOM','SPY'];
     tbody.innerHTML = order.map(sym => {
       const d = data[sym];
       if (!d || d.status === 'error' || !d.values?.length)
@@ -1353,7 +1353,8 @@ async function loadArch() {
     var archR = await fetch('/api/arch');
     if (archR.ok) {
       var archD = await archR.json();
-      if (archD.name === data.name && Array.isArray(archD.images) && archD.images.length) {
+      var normName = function(s) { return s.toLowerCase().replace(/ø/g,'o').replace(/æ/g,'ae').replace(/å/g,'a').replace(/ä/g,'a').replace(/ö/g,'o').replace(/ü/g,'u').normalize('NFD').replace(/[̀-ͯ]/g,''); };
+      if (normName(archD.name) === normName(data.name) && Array.isArray(archD.images) && archD.images.length) {
         imgs = archD.images.filter(function(img) { return img.url && !/\.svg/i.test(img.url); });
       }
     }
