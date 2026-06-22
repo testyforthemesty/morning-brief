@@ -1,25 +1,21 @@
 {
-  "name": "Bagsværd Church",
-  "city": "Bagsværd",
-  "country": "Denmark",
-  "year": 1976,
-  "architect": "Jørn Utzon",
-  "writeup": "Bagsværd Church sits quietly in a Copenhagen suburb, its corrugated concrete exterior giving almost no indication of what lies within. The interior is dominated by a continuous shell-like ceiling of cast concrete that billows and folds like clouds, flooding the nave with diffuse northern light. Utzon described the design as a collision between the universal — the cloud ceiling derived from ancient Chinese pavilion forms — and the local, the modest Danish parish. It is one of the most spatially surprising rooms in twentieth century architecture, and one of the least visited.",
-  "detail": "The undulating ceiling is formed from prefabricated concrete shell segments that overlap and interlock, each piece slightly different, creating an effect of movement despite being entirely static.",
-  "lat": 55.7576,
-  "lng": 12.4578,
+  "name": "San Michele Cemetery Extension",
+  "city": "Venice",
+  "country": "Italy",
+  "year": 1998,
+  "architect": "David Chipperfield",
+  "writeup": "Chipperfield designed an extension to the cemetery island of San Michele, the historic burial place of Venice, adding new burial courts and facilities to the western end of the island. The new courts use plain white concrete walls to create enclosed spaces of great serenity that are consistent with the scale and atmosphere of the existing cemetery without imitating its historical language. The geometry of the new courts was carefully calibrated against the footprint of the existing buildings across the water.",
+  "detail": "The new burial courts are entirely enclosed by plain concrete walls that frame views of the sky above, creating spaces of defined geometry and complete serenity that belong visually to the island's white walls.",
+  "lat": 45.4408,
+  "lng": 12.3155,
   "images": [
     {
-      "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/Bagsvard_church_interior.jpg/800px-Bagsvard_church_interior.jpg",
-      "caption": "Interior nave with cloud ceiling"
+      "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/62/Aerial_photographs_of_Venice_2013%2C_Anton_Nossik%2C_031.jpg/1280px-Aerial_photographs_of_Venice_2013%2C_Anton_Nossik%2C_031.jpg",
+      "caption": "Isola di San Michele from above, Venice"
     },
     {
-      "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Bagsvard_church_exterior.jpg/800px-Bagsvard_church_exterior.jpg",
-      "caption": "Corrugated concrete exterior"
-    },
-    {
-      "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Bagsvard_church_detail.jpg/800px-Bagsvard_church_detail.jpg",
-      "caption": "Ceiling detail"
+      "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Friedhof_San_Michele_Venedig_Aug_2020_1.jpg/1280px-Friedhof_San_Michele_Venedig_Aug_2020_1.jpg",
+      "caption": "San Michele Cemetery, Venice"
     }
   ]
 }
