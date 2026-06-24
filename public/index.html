@@ -1245,12 +1245,11 @@ function renderArch(data, imgs) {
 }
 
 // Fetch building photo. Tiers:
-//   1. Wikipedia pageimages API — flags the most representative article image
-//   2. Wikipedia opensearch → pageimages — handles minor name variations
-//   3. Wikimedia Commons file search — architectural photos indexed by building name
+//   1. Wikipedia exact-title pageimages — fast path for buildings with their own article
+//   2. Wikipedia full-text search + pageimages in one call — catches buildings whose
+//      article title differs from our name (architect and city queries run in parallel)
+//   3. Wikimedia Commons file search — architectural photos when Wikipedia has nothing
 async function fetchWikiImages(buildingName, architectName, city) {
-  // pageimages API is more reliable than page/summary: it returns the article's
-  // designated representative image rather than any image that appears first.
   async function wikiPageImage(title) {
     try {
       var r = await fetch('https://en.wikipedia.org/w/api.php?action=query&titles=' +
@@ -1266,8 +1265,25 @@ async function fetchWikiImages(buildingName, architectName, city) {
     } catch(e) { return null; }
   }
 
-  // Commons file search returns actual photos indexed by building name,
-  // skipping diagrams, plans, logos, and portraits by title keyword.
+  // Full-text Wikipedia search + pageimages in a single API call.
+  // generator=search finds articles that mention the building even when the title
+  // doesn't match exactly; results sorted by search rank (index field).
+  async function wikiSearchImages(query) {
+    try {
+      var r = await fetch('https://en.wikipedia.org/w/api.php?action=query' +
+        '&generator=search&gsrsearch=' + encodeURIComponent(query) +
+        '&gsrlimit=5&prop=pageimages&pithumbsize=1200&format=json&origin=*');
+      if (!r.ok) return null;
+      var d = await r.json();
+      var pages = d.query && d.query.pages;
+      if (!pages) return null;
+      var imgs = Object.values(pages)
+        .filter(function(p) { return p.thumbnail && !/\.svg/i.test(p.thumbnail.source); })
+        .sort(function(a, b) { return (a.index || 999) - (b.index || 999); });
+      return imgs.length ? imgs[0].thumbnail.source : null;
+    } catch(e) { return null; }
+  }
+
   async function commonsSearch(query) {
     try {
       var r = await fetch('https://commons.wikimedia.org/w/api.php?action=query' +
@@ -1288,34 +1304,20 @@ async function fetchWikiImages(buildingName, architectName, city) {
     } catch(e) { return []; }
   }
 
-  async function wikiSearch(query) {
-    try {
-      var r = await fetch('https://en.wikipedia.org/w/api.php?action=opensearch&search=' +
-        encodeURIComponent(query) + '&limit=3&format=json&origin=*');
-      if (!r.ok) return [];
-      return (await r.json())[1] || [];
-    } catch(e) { return []; }
-  }
-
-  // Tier 1: exact Wikipedia article title → pageimages
+  // Tier 1: exact Wikipedia article title — works for well-known buildings
   var url = await wikiPageImage(buildingName);
   if (url) return [{ url: url, caption: '' }];
 
-  // Tier 2: opensearch with architect name — much better disambiguation than "building"
-  var hits = await wikiSearch(buildingName + ' ' + architectName);
-  for (var i = 0; i < hits.length; i++) {
-    url = await wikiPageImage(hits[i]);
-    if (url) return [{ url: url, caption: '' }];
-  }
+  // Tier 2: full-text search with architect and city in parallel — one round trip each,
+  // handles buildings whose Wikipedia title differs from our building name
+  var pair = await Promise.all([
+    wikiSearchImages(buildingName + ' ' + architectName),
+    wikiSearchImages(buildingName + ' ' + (city || ''))
+  ]);
+  url = pair[0] || pair[1];
+  if (url) return [{ url: url, caption: '' }];
 
-  // Tier 3: opensearch with city
-  hits = await wikiSearch(buildingName + ' ' + (city || ''));
-  for (var j = 0; j < hits.length; j++) {
-    url = await wikiPageImage(hits[j]);
-    if (url) return [{ url: url, caption: '' }];
-  }
-
-  // Tier 4: Wikimedia Commons file search — best for architectural photos
+  // Tier 3: Wikimedia Commons — best for buildings with no standalone Wikipedia article
   var imgs = await commonsSearch(buildingName + ' ' + architectName);
   if (imgs.length) return [imgs[0]];
 
