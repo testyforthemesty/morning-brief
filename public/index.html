@@ -1244,11 +1244,9 @@ function renderArch(data, imgs) {
     '</a>';
 }
 
-// Fetch building photo. Tiers:
-//   1. Wikipedia exact-title pageimages — fast path for buildings with their own article
-//   2. Wikipedia full-text search + pageimages in one call — catches buildings whose
-//      article title differs from our name (architect and city queries run in parallel)
-//   3. Wikimedia Commons file search — architectural photos when Wikipedia has nothing
+// Fetch building photo.
+//   Tier 1: Wikipedia exact-title pageimages — works for well-known buildings
+//   Tier 2: Wikimedia Commons file search — actual photos, never screenshots or diagrams
 async function fetchWikiImages(buildingName, architectName, city) {
   async function wikiPageImage(title) {
     try {
@@ -1262,32 +1260,6 @@ async function fetchWikiImages(buildingName, architectName, city) {
       if (!page || 'missing' in page || !page.thumbnail) return null;
       var src = page.thumbnail.source;
       return (src && !/\.svg/i.test(src)) ? src : null;
-    } catch(e) { return null; }
-  }
-
-  // Full-text Wikipedia search + pageimages in a single API call.
-  // buildingWords filters results: only accept pages whose title shares a significant
-  // word with the building name, so architect biography pages are rejected.
-  async function wikiSearchImages(query, buildingName) {
-    try {
-      var r = await fetch('https://en.wikipedia.org/w/api.php?action=query' +
-        '&generator=search&gsrsearch=' + encodeURIComponent(query) +
-        '&gsrlimit=5&prop=pageimages&pithumbsize=1200&format=json&origin=*');
-      if (!r.ok) return null;
-      var d = await r.json();
-      var pages = d.query && d.query.pages;
-      if (!pages) return null;
-      var stopWords = /^(the|and|of|for|von|de|la|le|in|at|on|a|an|du|das|der|die)$/i;
-      var buildingWords = buildingName.toLowerCase().split(/\s+/)
-        .filter(function(w) { return w.length > 3 && !stopWords.test(w); });
-      var imgs = Object.values(pages)
-        .filter(function(p) {
-          if (!p.thumbnail || /\.svg/i.test(p.thumbnail.source)) return false;
-          var title = (p.title || '').toLowerCase();
-          return buildingWords.some(function(w) { return title.includes(w); });
-        })
-        .sort(function(a, b) { return (a.index || 999) - (b.index || 999); });
-      return imgs.length ? imgs[0].thumbnail.source : null;
     } catch(e) { return null; }
   }
 
@@ -1311,24 +1283,16 @@ async function fetchWikiImages(buildingName, architectName, city) {
     } catch(e) { return []; }
   }
 
-  // Tier 1: exact Wikipedia article title — works for well-known buildings
+  // Tier 1: exact Wikipedia article title
   var url = await wikiPageImage(buildingName);
   if (url) return [{ url: url, caption: '' }];
 
-  // Tier 2: full-text search with architect and city in parallel — one round trip each,
-  // handles buildings whose Wikipedia title differs from our building name
+  // Tier 2: Wikimedia Commons — run architect and city searches in parallel
   var pair = await Promise.all([
-    wikiSearchImages(buildingName + ' ' + architectName, buildingName),
-    wikiSearchImages(buildingName + ' ' + (city || ''), buildingName)
+    commonsSearch(buildingName + ' ' + architectName),
+    commonsSearch(buildingName + ' ' + (city || ''))
   ]);
-  url = pair[0] || pair[1];
-  if (url) return [{ url: url, caption: '' }];
-
-  // Tier 3: Wikimedia Commons — best for buildings with no standalone Wikipedia article
-  var imgs = await commonsSearch(buildingName + ' ' + architectName);
-  if (imgs.length) return [imgs[0]];
-
-  imgs = await commonsSearch(buildingName + ' ' + (city || ''));
+  var imgs = (pair[0].length ? pair[0] : pair[1]);
   if (imgs.length) return [imgs[0]];
 
   return [];
