@@ -1244,61 +1244,373 @@ function renderArch(data, imgs) {
     '</a>';
 }
 
-// Fetch building photo.
-//   Tier 1: Wikipedia exact-title pageimages — works for well-known buildings
-//   Tier 2: Wikimedia Commons file search — actual photos, never screenshots or diagrams
-async function fetchWikiImages(buildingName, architectName, city) {
-  async function wikiPageImage(title) {
-    try {
-      var r = await fetch('https://en.wikipedia.org/w/api.php?action=query&titles=' +
-        encodeURIComponent(title) + '&prop=pageimages&pithumbsize=1200&format=json&origin=*&redirects');
-      if (!r.ok) return null;
-      var d = await r.json();
-      // If Wikipedia redirected to a different article, it's not a dedicated page
-      // for this building — skip rather than risk a wrong or unrelated image.
-      if (d.query && d.query.redirects && d.query.redirects.length) return null;
-      var pages = d.query && d.query.pages;
-      if (!pages) return null;
-      var page = Object.values(pages)[0];
-      if (!page || 'missing' in page || !page.thumbnail) return null;
-      var src = page.thumbnail.source;
-      return (src && !/\.svg/i.test(src)) ? src : null;
-    } catch(e) { return null; }
-  }
+// Curated Wikipedia article titles for all buildings.
+// null = no dedicated Wikipedia article (show no image rather than risk a wrong one).
+var WIKI_TITLES = {
+  "Steiner House": "Steiner House",
+  "Goldman & Salatsch Building": "Looshaus",
+  "Villa Müller": "Villa Müller",
+  "Moller House": "Moller House",
+  "Karma House": "Villa Karma",
+  "Rufer House": "Rufer House",
+  "Scheu House": "Scheu House",
+  "Secession Building": "Vienna Secession Building",
+  "Hochzeitsturm": "Hochzeitsturm",
+  "AEG Turbine Factory": "AEG Turbinenfabrik",
+  "Fagus Factory": "Fagus Factory",
+  "Bauhaus Dessau": "Bauhaus Dessau",
+  "Glass Pavilion Cologne": "Glass Pavilion (Taut)",
+  "Einstein Tower": "Einstein Tower",
+  "Schocken Department Store": null,
+  "De La Warr Pavilion": "De La Warr Pavilion",
+  "Hat Factory Luckenwalde": null,
+  "Rietveld Schröder House": "Rietveld Schröder House",
+  "Van Nelle Factory": "Van Nelle Factory",
+  "Zonnestraal Sanatorium": "Zonnestraal",
+  "Hilversum Town Hall": "Hilversum Town Hall",
+  "Open Air School Amsterdam": "Cliostraat Open Air School",
+  "Eigen Haard Housing": null,
+  "De Dageraad Housing": "De Dageraad (housing block)",
+  "Het Schip": "Het Schip",
+  "Vrijheidslaan Housing": null,
+  "Villa Savoye": "Villa Savoye",
+  "Maisons Jaoul": "Maisons Jaoul",
+  "Unité d'Habitation Briey": "Unité d'habitation de Briey",
+  "Maison du Brésil": "Maison du Brésil",
+  "Carpenter Center": "Carpenter Center for the Visual Arts",
+  "Millowners' Association Building": "Millowners' Association Building",
+  "Shodhan House": "Villa Shodhan",
+  "Sarabhai House": "Villa Sarabhai",
+  "Tugendhat Villa": "Villa Tugendhat",
+  "Farnsworth House": "Farnsworth House",
+  "Lafayette Park": "Lafayette Park, Detroit",
+  "Bacardi Building": null,
+  "Paimio Sanatorium": "Paimio Sanatorium",
+  "Viipuri Library": "Viipuri Municipal Library",
+  "Villa Mairea": "Villa Mairea",
+  "Säynätsalo Town Hall": "Säynätsalo Town Hall",
+  "Church of the Three Crosses": "Church of the Three Crosses",
+  "Cultural Centre Wolfsburg": null,
+  "Seinäjoki Library": "Seinäjoki Library",
+  "Finlandia Hall": "Finlandia Hall",
+  "Riola Parish Church": null,
+  "Mount Angel Abbey Library": "Mount Angel Abbey",
+  "Nordic Pavilion Venice": "Nordic Pavilion",
+  "Hedmark Cathedral Museum": "Anno Museum",
+  "Glacier Museum": "Norwegian Glacier Museum",
+  "Norwegian Pavilion Expo": null,
+  "Villa Busk": null,
+  "Aukrust Centre": null,
+  "Ivar Aasen Centre": "Ivar Aasen-tunet",
+  "Bagsvaerd Church": "Bagsværd Church",
+  "Can Lis": "Can Lis",
+  "Can Feliz": "Can Feliz",
+  "Kuwait National Assembly": "National Assembly Building (Kuwait)",
+  "Kingo Houses": "Kingo Houses",
+  "Fredensborg Houses": "Fredensborg Houses",
+  "Espansiva System": null,
+  "Skogskyrkogården Chapels": "Skogskyrkogården",
+  "Markus Church": "S:t Markus kyrka, Stockholm",
+  "St. Peter's Church Klippan": "Saint Peter's Church, Klippan",
+  "Chapel of the Resurrection": "Chapel of the Resurrection (Stockholm)",
+  "Thermal Baths Vals": "Therme Vals",
+  "Kolumba Museum": "Kolumba (museum)",
+  "Bruder Klaus Field Chapel": "Bruder Klaus Field Chapel",
+  "Atelier Bardill": null,
+  "Zinc Mine Museum": "Allmannajuvet zinc mine museum",
+  "Steilneset Memorial": "Steilneset Memorial",
+  "Kunsthaus Bregenz": "Kunsthaus Bregenz",
+  "Swiss Sound Box Expo": null,
+  "Casa de Vidro": "Casa de Vidro",
+  "MASP": "MASP",
+  "SESC Pompéia": "SESC Pompéia",
+  "Solar do Unhão": "Solar do Unhão",
+  "Casa das Canoas": "Casa das Canoas",
+  "Copan Building": "Copan Building",
+  "Pedregulho Estate": "Pedregulho",
+  "Museum of Modern Art Rio": "Museum of Modern Art (Rio de Janeiro)",
+  "Torres del Parque": "Torres del Parque",
+  "Archivo General de la Nación": null,
+  "Casa de Huéspedes Ilustres": null,
+  "El Recreo Housing": null,
+  "Casa Barragán": "Casa Luis Barragán",
+  "Casa Gilardi": "Casa Gilardi",
+  "Cuadra San Cristóbal": "Cuadra San Cristóbal",
+  "Las Arboledas": null,
+  "Casa Prieto López": null,
+  "El Pedregal Gardens": "Jardines del Pedregal",
+  "Convent of the Capuchinas": null,
+  "Tlalpan Chapel": null,
+  "Brion Cemetery": "Brion Cemetery",
+  "Castelvecchio Museum": "Museo di Castelvecchio",
+  "Olivetti Showroom": null,
+  "Querini Stampalia": "Fondazione Querini Stampalia",
+  "Gipsoteca Canoviana": "Gipsoteca e Museo Canova",
+  "Zentner House": null,
+  "Banca Popolare di Verona": null,
+  "Richards Medical Research": "Richards Medical Research Laboratories",
+  "Salk Institute": "Salk Institute for Biological Studies",
+  "Kimbell Art Museum": "Kimbell Art Museum",
+  "Phillips Exeter Library": "Phillips Exeter Academy Library",
+  "Yale Center for British Art": "Yale Center for British Art",
+  "First Unitarian Church": "First Unitarian Church of Rochester",
+  "Trenton Bath House": null,
+  "Erdman Hall Dormitories": "Erdman Hall",
+  "Indian Institute of Management": "Indian Institute of Management Ahmedabad",
+  "FDR Four Freedoms Park": "Franklin D. Roosevelt Four Freedoms Park",
+  "Unity Temple": "Unity Temple",
+  "Robie House": "Robie House",
+  "Hollyhock House": "Hollyhock House",
+  "Ennis House": "Ennis House",
+  "Johnson Wax Building": "SC Johnson headquarters",
+  "Florida Southern College Chapel": "Annie Pfeiffer Chapel",
+  "Beth Sholom Synagogue": "Beth Sholom Congregation",
+  "Annunciation Greek Orthodox": "Annunciation Greek Orthodox Church (Wauwatosa, Wisconsin)",
+  "Taliesin": "Taliesin (studio)",
+  "Rose Seidler House": "Rose Seidler House",
+  "Blues Point Tower": "Blues Point Tower",
+  "Riverside Centre": "Riverside Centre, Brisbane",
+  "Milsons Point Housing": null,
+  "Vanna Venturi House": "Vanna Venturi House",
+  "Tucker House": null,
+  "Trubek & Wislocki Houses": null,
+  "Gordon Wu Hall": "Wu Hall",
+  "Sainsbury Wing National Gallery": "Sainsbury Wing",
+  "Wexner Center for the Arts": "Wexner Center for the Arts",
+  "Aronoff Center": "Aronoff Center for Design and Art",
+  "House VI": "House VI",
+  "House II": null,
+  "House III": null,
+  "Church on the Water": "Chapel on the Water",
+  "Church of the Light": "Church of the Light",
+  "Rokko Housing": "Rokko Housing",
+  "Naoshima Contemporary Art Museum": "Benesse House",
+  "Chikatsu-Asuka Historical Museum": null,
+  "Azuma House": "Azuma House",
+  "Koshino House": "Koshino House",
+  "Benesse House": "Benesse House",
+  "Water Temple": "Honpuku-ji",
+  "Sendai Mediatheque": "Sendai Mediatheque",
+  "Serpentine Pavilion": "Serpentine Pavilion",
+  "Tama Art University Library": "Tama Art University",
+  "Tower of Winds": "Tower of Winds (Yokohama)",
+  "Pao Dwelling for Tokyo Nomad Women": null,
+  "Silver Hut": "Silver Hut",
+  "Nakatake Housing": null,
+  "Taichung Metropolitan Opera": "National Taichung Theater",
+  "White U House": null,
+  "Kiasma Museum": "Kiasma",
+  "Chapel of St. Ignatius": "Chapel of St. Ignatius",
+  "Simmons Hall": "Simmons Hall (MIT)",
+  "Linked Hybrid": "Linked Hybrid",
+  "Bloch Building": "Nelson-Atkins Museum of Art",
+  "Cranbrook Institute of Science": "Cranbrook Institute of Science",
+  "Higgins Hall": null,
+  "Planar House": null,
+  "Museum of the City": null,
+  "Horizontal Skyscraper": null,
+  "Magney House": null,
+  "Marika-Alderton House": null,
+  "Simpson-Lee House": null,
+  "Fletcher-Page House": null,
+  "Bowali Visitor Centre": null,
+  "Arthur and Yvonne Boyd Education Centre": null,
+  "Fredericks-White House": null,
+  "Neues Museum": "Neues Museum",
+  "Hepworth Wakefield": "The Hepworth Wakefield",
+  "Anchorage Museum": "Anchorage Museum",
+  "San Michele Cemetery Extension": "San Michele (island)",
+  "Figge Art Museum": "Figge Art Museum",
+  "Kulturforum Hotel": null,
+  "Gotoh Museum": null,
+  "Joseph Shop": null,
+  "Prada Aoyama": "Prada Aoyama",
+  "Ricola Storage Building": null,
+  "Signal Box Basel": "Signal Box auf dem Wolf",
+  "Antipodes Houses": null,
+  "Dominus Winery": "Dominus Estate",
+  "Rémy Zaugg Studio": null,
+  "Schaulager": "Schaulager",
+  "Vitrahaus": "VitraHaus",
+  "Rudin House": null,
+  "Blue House": null,
+  "Vitra Design Museum": "Vitra Design Museum",
+  "Frederick Weisman Museum": "Frederick R. Weisman Art Museum",
+  "Winton Guest House": null,
+  "Gehry House": "Gehry Residence",
+  "Edgemar Development": null,
+  "Norton House": null,
+  "Wosk Residence": null,
+  "Ray & Maria Stata Center": "Ray and Maria Stata Center",
+  "ROLEX Learning Center": "Rolex Learning Center",
+  "Toledo Museum Glass Pavilion": "Toledo Museum of Art",
+  "Zollverein School": "Zollverein School of Management and Design",
+  "New Museum": "New Museum",
+  "Grace Farms": "Grace Farms",
+  "House in a Plum Grove": "House in a Plum Grove",
+  "Moriyama House": "Moriyama House",
+  "Small House": null,
+  "Weekend House": null,
+  "Stadstheater Almere": null,
+  "Haas Haus": "Haas Haus",
+  "Museum Abteiberg": "Museum Abteiberg",
+  "Österreichisches Museum für Angewandte Kunst": "MAK Vienna",
+  "Vulcania Museum": "Vulcania",
+  "Travel Agency Vienna": null,
+  "Schullin Jewellery Shop": null,
+  "Retti Candle Shop": null,
+  "Jewish Museum Vienna": "Jewish Museum Vienna",
+  "Graz Art Museum": "Kunsthaus Graz",
+  "Baumschlager Eberle Housing": null,
+  "Wohnanlage Traviatagasse": null,
+  "Gasometer City": "Vienna Gasometers",
+  "Thermal Bath Strümpfelbach": null,
+  "Werkbundsiedlung Vienna": "Wiener Werkbundsiedlung",
+  "Weissenhof Estate": "Weissenhofsiedlung",
+  "Dammerstock Settlement": "Dammerstock",
+  "Törten Estate": "Dessau-Törten",
+  "Highpoint One": "Highpoint One and Two",
+  "Penguin Pool London Zoo": "Penguin Pool, London Zoo",
+  "Finsbury Health Centre": "Finsbury Health Centre",
+  "Isokon Flats": "Isokon Building",
+  "Hallfield Estate": "Hallfield Estate",
+  "Royal College of Physicians": "Royal College of Physicians, London",
+  "National Theatre London": "National Theatre (London)",
+  "University of East Anglia": "University of East Anglia",
+  "Keeling House": "Keeling House",
+  "Park Hill": "Park Hill, Sheffield",
+  "Economist Building": "The Economist (building)",
+  "Hunstanton School": "Hunstanton School",
+  "Robin Hood Gardens": "Robin Hood Gardens",
+  "Trellick Tower": "Trellick Tower",
+  "Balfron Tower": "Balfron Tower",
+  "Barbican Estate": "Barbican Estate",
+  "Wills Faber Dumas": "Willis Building, Ipswich",
+  "Sainsbury Centre": "Sainsbury Centre for Visual Arts",
+  "Ahrends Burton Koralek Library": "Berkeley Library, Trinity College Dublin",
+  "Trinity College Dublin Arts Building": null,
+  "Busáras": "Busáras",
+  "Casa Malaparte": "Casa Malaparte",
+  "Palazzo dello Sport": "Palazzo dello Sport",
+  "Pirelli Tower": "Pirelli Tower",
+  "Torre Velasca": "Torre Velasca",
+  "Gallaratese Housing": "Gallaratese",
+  "Cemetery of San Cataldo": "Cemetery of San Cataldo",
+  "Teatro del Mondo": "Teatro del Mondo",
+  "Il Palazzo Hotel": "Il Palazzo",
+  "Casa Aurora": null,
+  "Fagnano Olona Primary School": null,
+  "INA Casa Harar Quarter": null,
+  "Tiburtino Quarter": null,
+  "Torre Triennale": null,
+  "Casa Rustici": null,
+  "Casa del Fascio": "Casa del Fascio",
+  "Novocomum": "Novocomum",
+  "Asilo Sant'Elia": "Sant'Elia Nursery School",
+  "Danteum": "Danteum",
+  "Hansaviertel Apartment": "Hansaviertel",
+  "Berlin Philharmonie": "Berlin Philharmonic",
+  "Staatsbibliothek Berlin": "Staatsbibliothek zu Berlin",
+  "Geschwister-Scholl-Schule": null,
+  "Schminke House": "Schminke House",
+  "Romeo and Juliet Housing": null,
+  "Salgo Trust Building": null,
+  "Hässelby Housing": null,
+  "Vällingby Centre": "Vällingby",
+  "Louisiana Museum of Modern Art": "Louisiana Museum of Modern Art",
+  "Utzon Center": "Utzon Center",
+  "Ringkøbing-Skjern Museum": null,
+  "Haraldskær Conference Centre": null,
+  "Trondheim University Library": null,
+  "Tietgen Dormitory": "Tietgen Dormitory",
+  "Karen Blixen Museum": "Karen Blixen Museum",
+  "Silkeborg Library": null,
+  "Ørestad Gymnasium": null,
+  "IT University Copenhagen": "IT University of Copenhagen",
+  "Espoo Cultural Centre": null,
+  "Rovaniemi Library": "Lappia House",
+  "Temppeliaukio Church": "Temppeliaukio Church",
+  "Kannelmäki Church": null,
+  "Myyrmäki Church": null,
+  "Männistö Church": null,
+  "Espoo Cathedral Parish Centre": null,
+  "Kauniainen Church": null,
+  "Jakomäki Church": null,
+  "Suvela Chapel": null,
+  "University of Jyväskylä": "University of Jyväskylä",
+  "Otaniemi Technical University": "Aalto University School of Science",
+  "Institute of International Education": null,
+  "Manufacturers Hanover Trust": null,
+  "CBS Building": "CBS Building",
+  "Dulles Airport": "Washington Dulles International Airport",
+  "TWA Flight Center": "Trans World Airlines Flight Center",
+  "Miller House": "Miller House (Columbus, Indiana)",
+  "Ingalls Rink": "Ingalls Rink",
+  "Kresge Auditorium": "Kresge Auditorium",
+  "US Embassy Oslo": "Embassy of the United States, Oslo",
+  "Drake University Pharmacy Building": null,
+  "Peabody Terrace": "Peabody Terrace",
+  "Foundation Maeght": "Fondation Maeght",
+  "Joan Miró Foundation": "Fundació Joan Miró",
+  "Hooper House": null,
+  "Saint John's Abbey Church": "Saint John's Abbey, Collegeville",
+  "Whitney Museum": "Met Breuer",
+  "IBM Research Center": null,
+  "Cleveland Museum Addition": "Cleveland Museum of Art",
+  "Stillman House": null,
+  "Glaspaleis": "Glaspaleis",
+  "Van den Broek & Bakema Lijnbaan": "Lijnbaan",
+  "Pampus Plan": null,
+  "Delfts Technical University Aula": null,
+  "Beheer Centraal Building": "Centraal Beheer",
+  "Centraal Beheer Extension": "Centraal Beheer",
+  "Diagoon Houses": null,
+  "Montessori School Delft": null,
+  "De Drie Hoven": null,
+  "Anne Frank House Extension": "Anne Frank House",
+  "Educatorium Utrecht": null,
+  "Nexus Housing": null,
+  "Villa dall'Ava": "Villa dall'Ava",
+  "Maison Bordeaux": "Maison à Bordeaux",
+  "Kunsthal Rotterdam": "Kunsthal",
+  "Netherlands Embassy Berlin": "Embassy of the Netherlands, Berlin",
+  "Yokohama International Port Terminal": "Yokohama Port Terminal",
+  "Ravensbourne College": "Ravensbourne University London",
+  "John Lewis Department Store": null,
+  "Carabanchel Social Housing": null,
+  "Bodegas Ysios": "Bodegas Ysios",
+  "Stadelhofen Station": "Stadelhofen railway station",
+  "BCE Place": "Brookfield Place (Toronto)",
+  "Kuwait Pavilion Expo": null,
+  "Montjuïc Communications Tower": "Torre de Calatrava",
+  "Olympic Stadium Athens Roof": "Athens Olympic Stadium",
+  "Tenerife Concert Hall": "Auditorio de Tenerife",
+  "Brock University Pond Inlet": null,
+  "Lascaux IV Cave Museum": "Lascaux IV",
+  "Ryerson Image Centre": null,
+  "King Abdulaziz Centre": "King Abdulaziz Center for World Culture",
+  "Max IV Laboratory": "MAX IV Laboratory"
+};
 
-  async function commonsSearch(query) {
-    try {
-      var r = await fetch('https://commons.wikimedia.org/w/api.php?action=query' +
-        '&generator=search&gsrsearch=' + encodeURIComponent(query) +
-        '&gsrnamespace=6&gsrlimit=8&prop=imageinfo' +
-        '&iiprop=url|dimensions&iiurlwidth=800&format=json&origin=*');
-      if (!r.ok) return [];
-      var d = await r.json();
-      var pages = d.query && d.query.pages;
-      if (!pages) return [];
-      return Object.values(pages)
-        .filter(function(p) {
-          return p.imageinfo && p.imageinfo[0] && p.imageinfo[0].thumburl &&
-            !/\.(svg|tif)/i.test(p.title) &&
-            !/plan|diagram|logo|coat|crest|map|portrait|bust|schema|floor|screenshot/i.test(p.title);
-        })
-        .map(function(p) { return { url: p.imageinfo[0].thumburl, caption: '' }; });
-    } catch(e) { return []; }
-  }
-
-  // Tier 1: exact Wikipedia article title
-  var url = await wikiPageImage(buildingName);
-  if (url) return [{ url: url, caption: '' }];
-
-  // Tier 2: Wikimedia Commons — run architect and city searches in parallel
-  var pair = await Promise.all([
-    commonsSearch(buildingName + ' ' + architectName),
-    commonsSearch(buildingName + ' ' + (city || ''))
-  ]);
-  var imgs = (pair[0].length ? pair[0] : pair[1]);
-  if (imgs.length) return [imgs[0]];
-
-  return [];
+// Fetch building photo using curated Wikipedia title lookup.
+// Returns [] for buildings with null in WIKI_TITLES (no image shown).
+async function fetchWikiImages(buildingName) {
+  var title = WIKI_TITLES[buildingName];
+  if (title === undefined) title = buildingName; // not in table — try name directly
+  if (!title) return [];                          // null = explicitly no image
+  try {
+    var r = await fetch('https://en.wikipedia.org/w/api.php?action=query&titles=' +
+      encodeURIComponent(title) + '&prop=pageimages&pithumbsize=1200&format=json&origin=*&redirects');
+    if (!r.ok) return [];
+    var d = await r.json();
+    var pages = d.query && d.query.pages;
+    if (!pages) return [];
+    var page = Object.values(pages)[0];
+    if (!page || 'missing' in page || !page.thumbnail) return [];
+    var src = page.thumbnail.source;
+    if (!src || /\.svg/i.test(src)) return [];
+    return [{ url: src, caption: '' }];
+  } catch(e) { return []; }
 }
 
 async function loadArch() {
@@ -1322,7 +1634,7 @@ async function loadArch() {
 
   renderArch(data, []);
 
-  var imgs = await fetchWikiImages(data.name, data.architect, data.city);
+  var imgs = await fetchWikiImages(data.name);
   if (imgs.length) renderArch(data, imgs);
 }
 
