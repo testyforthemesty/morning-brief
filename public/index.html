@@ -1251,16 +1251,18 @@ async function fetchWikiImages(buildingName, architectName, city) {
   async function wikiPageImage(title) {
     try {
       var r = await fetch('https://en.wikipedia.org/w/api.php?action=query&titles=' +
-        encodeURIComponent(title) + '&prop=pageimages&pithumbsize=1200&format=json&origin=*');
+        encodeURIComponent(title) + '&prop=pageimages&pithumbsize=1200&format=json&origin=*&redirects');
       if (!r.ok) return null;
       var d = await r.json();
+      // If Wikipedia redirected to a different article, it's not a dedicated page
+      // for this building — skip rather than risk a wrong or unrelated image.
+      if (d.query && d.query.redirects && d.query.redirects.length) return null;
       var pages = d.query && d.query.pages;
       if (!pages) return null;
       var page = Object.values(pages)[0];
       if (!page || 'missing' in page || !page.thumbnail) return null;
       var src = page.thumbnail.source;
-      var bad = /\.svg|screenshot|wiki_logo|icon|logo|flag|seal|coat|crest|portrait|bust|map|plan|diagram/i;
-      return (src && !bad.test(src)) ? src : null;
+      return (src && !/\.svg/i.test(src)) ? src : null;
     } catch(e) { return null; }
   }
 
