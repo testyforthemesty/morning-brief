@@ -9,16 +9,14 @@ module.exports = async function handler(req, res) {
   const YF_HEADERS = { 'User-Agent': 'Mozilla/5.0' };
 
   async function fetchYF(symbol) {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=2d`;
     const r = await fetch(url, { headers: YF_HEADERS });
     const j = await r.json();
     const result = j?.chart?.result?.[0];
     if (!result) return { cur: null, prev: null };
-    const closes = result.indicators?.quote?.[0]?.close ?? [];
-    const valid = closes.filter(v => v != null);
     return {
-      cur:  result.meta.regularMarketPrice ?? valid[valid.length - 1] ?? null,
-      prev: valid[valid.length - 2] ?? null,
+      cur:  result.meta.regularMarketPrice ?? null,
+      prev: result.meta.previousClose ?? result.meta.chartPreviousClose ?? null,
     };
   }
 
