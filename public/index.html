@@ -1259,7 +1259,8 @@ async function fetchWikiImages(buildingName, architectName, city) {
       var page = Object.values(pages)[0];
       if (!page || 'missing' in page || !page.thumbnail) return null;
       var src = page.thumbnail.source;
-      return (src && !/\.svg/i.test(src)) ? src : null;
+      var bad = /\.svg|screenshot|wiki_logo|icon|logo|flag|seal|coat|crest|portrait|bust|map|plan|diagram/i;
+      return (src && !bad.test(src)) ? src : null;
     } catch(e) { return null; }
   }
 
@@ -1277,7 +1278,7 @@ async function fetchWikiImages(buildingName, architectName, city) {
         .filter(function(p) {
           return p.imageinfo && p.imageinfo[0] && p.imageinfo[0].thumburl &&
             !/\.(svg|tif)/i.test(p.title) &&
-            !/plan|diagram|logo|coat|crest|map|portrait|bust|schema|floor/i.test(p.title);
+            !/plan|diagram|logo|coat|crest|map|portrait|bust|schema|floor|screenshot/i.test(p.title);
         })
         .map(function(p) { return { url: p.imageinfo[0].thumburl, caption: '' }; });
     } catch(e) { return []; }
