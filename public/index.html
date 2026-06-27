@@ -58,28 +58,6 @@
     box-shadow:0 0 0 2px color-mix(in oklab,var(--accent) 18%,transparent);
   }
 
-  /* INTRO */
-  .qt-intro {
-    padding:12px 0 10px;
-    display:flex; flex-direction:column; gap:6px;
-    flex-shrink:0;
-  }
-  .qt-intro__toprow { display:flex; justify-content:space-between; align-items:baseline; }
-  .qt-intro__date { font-size:11px; color:var(--muted); display:flex; gap:6px; }
-  .qt-intro__sep { color:var(--muted-2); }
-  .qt-intro__quote {
-    font-family:'Source Serif 4',Georgia,serif;
-    font-size:14px; font-style:italic;
-    line-height:1.45; color:var(--ink-2);
-    max-width:760px; padding-left:14px;
-    border-left:2px solid var(--accent);
-  }
-  .qt-intro__qmark { color:var(--accent); margin-right:3px; font-weight:600; }
-  .qt-intro__qattr {
-    display:inline; font-family:'Inter',sans-serif;
-    font-style:normal; font-size:11px; color:var(--muted);
-    margin-left:6px;
-  }
 
   /* HR */
   .qt-hr { height:1px; background:var(--line); margin:0 0 12px; flex-shrink:0; }
@@ -208,22 +186,6 @@
 <div id="root">
 <div class="qt">
 
-  <section class="qt-intro">
-    <div class="qt-intro__toprow">
-      <div class="qt-intro__date">
-        <span id="top-date-weekday"></span>
-        <span class="qt-intro__sep">·</span>
-        <span id="top-date-long"></span>
-      </div>
-      <span class="qt-live"><span class="qt-live__dot"></span> <span id="rlabel">Loading…</span></span>
-    </div>
-    <div class="qt-intro__quote">
-      <span class="qt-intro__qmark">"</span><span id="quote-text"></span>
-      <span class="qt-intro__qattr" id="quote-attr"></span>
-    </div>
-  </section>
-
-  <div class="qt-hr"></div>
 
   <div class="qt-grid">
 
@@ -300,14 +262,6 @@ function pctCell(p) {
   return `<span class="${cls}">${sign}${Math.abs(p).toFixed(2)}%</span>`;
 }
 
-function tick() {
-  const now = new Date();
-  const parts = now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}).split(', ');
-  document.getElementById('top-date-weekday').textContent = parts[0];
-  document.getElementById('top-date-long').textContent = parts.slice(1).join(', ');
-}
-tick();
-setInterval(tick, 60000);
 
 // Twelve Data free plan: 8 API credits/min, 1 credit per symbol per request.
 // Equities (8 symbols) and treasury indices (2 symbols) are split into separate
@@ -1994,7 +1948,6 @@ async function loadArch() {
 
 async function loadAll() {
   _tdPromise = null; // reset so each 30-min refresh gets fresh data
-  loadQuote();
   loadArch();
   await Promise.all([loadEquities(), loadCrypto(), loadRates()]);
   document.getElementById('rlabel').textContent =
