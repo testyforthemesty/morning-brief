@@ -819,7 +819,7 @@ function renderArch(data) {
 async function loadArch() {
   var el = document.getElementById('arch-content');
   try {
-    var r = await fetch('https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Ffeeds.feedburner.com%2FArchdaily&count=20');
+    var r = await fetch('https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fwww.archdaily.com%2Ffeed%2F&count=20');
     if (!r.ok) throw new Error();
     var d = await r.json();
     var items = (d.items || []).filter(function(item) {
