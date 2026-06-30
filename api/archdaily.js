@@ -19,7 +19,7 @@ module.exports = async function handler(req, res) {
     while ((m = itemRe.exec(xml)) !== null) {
       const block = m[1];
       const get = (tag) => {
-        const r = new RegExp('<' + tag + '[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/' + tag + '>|<' + tag + '[^>]*>([^<]*)<\\/' + tag + '>');
+        const r = new RegExp('<' + tag + '[^>]*>\\s*<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>\\s*<\\/' + tag + '>|<' + tag + '[^>]*>([^<]*)<\\/' + tag + '>');
         const match = r.exec(block);
         return match ? (match[1] || match[2] || '').trim() : '';
       };
