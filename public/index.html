@@ -818,28 +818,34 @@ function renderArch(data) {
 
 async function loadArch() {
   var el = document.getElementById('arch-content');
-  try {
-    var r = await fetch('https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fwww.archdaily.com%2Ffeed%2F&count=20');
-    if (!r.ok) throw new Error();
-    var d = await r.json();
-    var items = (d.items || []).filter(function(item) {
-      return item.title && item.title.includes(' / ');
-    });
-    if (!items.length) throw new Error('no project items');
-    var item = items[0];
-    var parts = item.title.split(' / ');
-    var buildingName = parts.slice(0, -1).join(' / ');
-    var architect = parts[parts.length - 1];
-    var imgUrl = item.thumbnail || (item.enclosure && item.enclosure.link) || '';
-    var tmp = document.createElement('div');
-    tmp.innerHTML = item.description || '';
-    var desc = (tmp.textContent || tmp.innerText || '').trim().replace(/\s+/g, ' ');
-    if (desc.length > 500) desc = desc.substring(0, 500).replace(/\s\S+$/, '') + '\u2026';
-    renderArch({ name: buildingName, architect: architect, imgUrl: imgUrl, desc: desc, link: item.link });
-  } catch(e) {
-    el.innerHTML = '<div class="qt-sechead"><h2 class="qt-sechead__t">Daily Architecture Digest</h2></div>' +
-      "<p class='qt-feature__loading'>Could not load today\'s building.</p>";
+  var attempts = 0;
+  while (attempts < 3) {
+    try {
+      if (attempts > 0) await new Promise(function(res){ setTimeout(res, 1500); });
+      var r = await fetch('https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fwww.archdaily.com%2Ffeed%2F&count=20');
+      if (!r.ok) throw new Error('http ' + r.status);
+      var d = await r.json();
+      if (d.status !== 'ok') throw new Error('feed status ' + d.status);
+      var items = (d.items || []).filter(function(item) {
+        return item.title && item.title.includes(' / ') && item.thumbnail;
+      });
+      if (!items.length) throw new Error('no project items');
+      var item = items[0];
+      var parts = item.title.split(' / ');
+      var buildingName = parts.slice(0, -1).join(' / ');
+      var architect = parts[parts.length - 1];
+      var tmp = document.createElement('div');
+      tmp.innerHTML = item.description || '';
+      var desc = (tmp.textContent || tmp.innerText || '').trim().replace(/\s+/g, ' ');
+      if (desc.length > 500) desc = desc.substring(0, 500).replace(/\s\S+$/, '') + '\u2026';
+      renderArch({ name: buildingName, architect: architect, imgUrl: item.thumbnail, desc: desc, link: item.link });
+      return;
+    } catch(e) {
+      attempts++;
+    }
   }
+  el.innerHTML = '<div class="qt-sechead"><h2 class="qt-sechead__t">Daily Architecture Digest</h2></div>' +
+    "<p class='qt-feature__loading'>Could not load today's building.</p>";
 }
 
 
