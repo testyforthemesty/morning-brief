@@ -1,3 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Morning Brief</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐝</text></svg>">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { background:#FAFAF7; height:100vh; overflow:hidden; }
+  body {
+    font-family:'Inter',system-ui,sans-serif;
+    display:flex; justify-content:center;
+    -webkit-font-smoothing:antialiased;
+    font-feature-settings:"ss01","cv11";
+  }
+  #root { width:100%; max-width:1680px; height:100vh; display:flex; flex-direction:column; }
+
+  .qt {
+    --ink:#202123; --ink-2:#353740;
+    --muted:#6E6E80; --muted-2:#A0A0AB;
+    --line:#ECECEC; --line-2:#E2E2E2;
+    --paper:#FAFAF7; --paper-2:#FFFFFF; --paper-3:#F4F2ED;
+    --up:#0E7A3A; --dn:#BF3B2F;
+    --accent:#0E7A3A;
+    font-family:'Inter',system-ui,sans-serif;
+    background:var(--paper); color:var(--ink);
+    padding:24px 40px 0;
+    flex:1; display:flex; flex-direction:column; overflow:hidden;
+  }
+
+  /* NAV */
+  .qt-nav {
+    display:grid; grid-template-columns:1fr auto 1fr;
+    align-items:center;
+    padding:12px 0 10px;
+    border-bottom:1px solid var(--line);
+    gap:24px; flex-shrink:0;
+  }
+  .qt-nav__brand { display:flex; align-items:center; gap:8px; }
+  .qt-mark {
+    width:18px; height:18px;
+    background:var(--accent); border-radius:50%;
+    display:inline-block;
+    box-shadow:inset 0 0 0 4px var(--paper);
+  }
+  .qt-brand {
+    font-family:'Source Serif 4',Georgia,serif;
+    font-weight:500; font-size:16px;
+    letter-spacing:-0.01em; color:var(--ink);
+  }
+  .qt-nav__meta { text-align:right; grid-column:3; }
+  .qt-live { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); }
+  .qt-live__dot {
+    width:6px; height:6px;
+    background:var(--accent); border-radius:50%; display:inline-block;
+    box-shadow:0 0 0 2px color-mix(in oklab,var(--accent) 18%,transparent);
+  }
+
+
+  /* HR */
+  .qt-hr { height:1px; background:var(--line); margin:0 0 12px; flex-shrink:0; }
+
+  /* SECTION */
+  .qt-sec { margin-bottom:12px; }
+  .qt-sechead {
+    display:flex; align-items:baseline;
+    justify-content:space-between;
+    padding-bottom:7px; margin-bottom:9px;
+    border-bottom:1px solid var(--line);
+  }
+  .qt-sechead__t {
+    font-family:'Source Serif 4',Georgia,serif;
+    font-weight:500; font-size:16px;
+    letter-spacing:-0.01em; color:var(--ink); margin:0;
+  }
+  .qt-sechead__m { font-size:11px; color:var(--muted); }
+
+  /* GRID — fills remaining height, both columns scroll independently */
+  .qt-grid {
+    display:grid; grid-template-columns:1.15fr 1fr;
+    gap:40px; flex:1; min-height:0;
+  }
+  .qt-feature { padding-bottom:16px; }
+  .qt-side { display:flex; flex-direction:column; padding-bottom:16px; }
+
+  /* FEATURE (architecture) */
+  .qt-feature__fig { margin:0 0 10px; }
+  .qt-feature__img {
+    border-radius:8px;
+    overflow:hidden;
+  }
+  .qt-feature__img img { max-width:100%; max-height:380px; width:auto; height:auto; display:block; margin:0 auto; }
+  .qt-feature__cap {
+    font-family:'Source Serif 4',Georgia,serif;
+    font-style:italic; font-size:11px; color:var(--muted);
+    line-height:1.4; margin-top:5px;
+  }
+  .qt-feature__title {
+    font-family:'Source Serif 4',Georgia,serif;
+    font-weight:500; font-size:26px;
+    line-height:1.05; letter-spacing:-0.02em;
+    margin:2px 0 4px; color:var(--ink);
+  }
+  .qt-feature__meta { font-size:11px; color:var(--muted); margin-bottom:8px; }
+  .qt-feature__sep { margin:0 6px; color:var(--muted-2); }
+  .qt-feature__body {
+    font-size:13px; line-height:1.55;
+    color:var(--ink-2); margin:0 0 12px;
+  }
+  .qt-detail {
+    background:var(--paper-3); border-radius:8px;
+    padding:10px 14px; margin-bottom:12px;
+    border-left:3px solid var(--accent);
+  }
+  .qt-detail__label {
+    font-size:10px; font-weight:600;
+    letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--accent); margin-bottom:4px;
+  }
+  .qt-detail__body {
+    font-family:'Source Serif 4',Georgia,serif;
+    font-size:13px; font-style:italic;
+    line-height:1.5; color:var(--ink-2); margin:0;
+  }
+  .qt-btn {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:7px 14px;
+    background:var(--ink); color:var(--paper);
+    border:none; border-radius:999px;
+    font-family:inherit; font-size:12px; font-weight:500;
+    cursor:pointer; transition:background 0.15s;
+    text-decoration:none;
+  }
+  .qt-btn:hover { background:var(--accent); }
+  .qt-btn__arr { font-size:12px; }
+  .qt-feature__loading { font-size:12px; color:var(--muted); font-style:italic; padding:20px 0; }
+
+  /* TABLE (crypto) */
+  .qt-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .qt-table th {
+    text-align:left; font-weight:500;
+    font-size:10px; letter-spacing:0.04em;
+    color:var(--muted); padding:4px 6px 7px;
+    border-bottom:1px solid var(--line);
+  }
+  .qt-table th.r, .qt-table td.r { text-align:right; }
+  .qt-table td {
+    padding:7px 6px; border-bottom:1px solid var(--line);
+    font-variant-numeric:tabular-nums;
+  }
+  .qt-table tr:last-child td { border-bottom:none; }
+  .qt-table__sym { font-weight:600; font-size:12px; color:var(--ink); letter-spacing:0.02em; }
+  .qt-table__price {
+    font-family:'Source Serif 4',Georgia,serif;
+    font-weight:500; font-size:13px; color:var(--ink);
+  }
+  .qt-table .up { color:var(--up); font-weight:500; }
+  .qt-table .dn { color:var(--dn); font-weight:500; }
+
+  /* RATES */
+  .qt-rates { list-style:none; margin:0; padding:0; }
+  .qt-rates li {
+    padding:7px 0; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:baseline;
+  }
+  .qt-rates li:last-child { border-bottom:none; }
+  .qt-rates__lbl { font-size:12px; color:var(--ink-2); }
+  .qt-rates__row { display:flex; align-items:baseline; gap:8px; }
+  .qt-rates__val {
+    font-family:'Source Serif 4',Georgia,serif;
+    font-weight:500; font-size:17px;
+    letter-spacing:-0.015em; font-variant-numeric:tabular-nums;
+    color:var(--ink);
+  }
+  .qt-rates__d { font-size:11px; font-weight:500; }
+  .qt-rates__d.up { color:var(--up); }
+  .qt-rates__d.dn { color:var(--dn); }
+
+  .qt-err { font-size:11px; color:var(--dn); padding:6px 0; }
+  .qt-loading { font-size:11px; color:var(--muted); font-style:italic; padding:6px 0; }
+</style>
+</head>
+<body>
+<div id="root">
+<div class="qt">
+
+
+  <div class="qt-grid">
+
+    <section class="qt-feature" id="arch-content">
+      <div class="qt-feature__loading">Loading today's building…</div>
+    </section>
+
+    <aside class="qt-side">
+
+      <section class="qt-sec">
+        <div class="qt-sechead">
+          <h2 class="qt-sechead__t">Equities</h2>
+          <span class="qt-sechead__m">USD</span>
+        </div>
+        <table class="qt-table">
+          <thead>
+            <tr>
+              <th>Asset</th>
+              <th class="r">24H</th>
+              <th class="r">30D</th>
+              <th class="r">Price</th>
+            </tr>
+          </thead>
+          <tbody id="eq-body"><tr><td colspan="4" class="qt-loading">Loading…</td></tr></tbody>
+        </table>
+      </section>
+
+      <section class="qt-sec">
+        <div class="qt-sechead">
+          <h2 class="qt-sechead__t">Crypto</h2>
+          <span class="qt-sechead__m">USD</span>
+        </div>
+        <table class="qt-table">
+          <thead>
+            <tr>
+              <th>Asset</th>
+              <th class="r">1H</th>
+              <th class="r">24H</th>
+              <th class="r">30D</th>
+              <th class="r">Price</th>
+            </tr>
+          </thead>
+          <tbody id="crypto-body"><tr><td colspan="5" class="qt-loading">Loading…</td></tr></tbody>
+        </table>
+      </section>
+
+      <section class="qt-sec">
+        <div class="qt-sechead">
+          <h2 class="qt-sechead__t">Rates</h2>
+          <span class="qt-sechead__m">US Treasury</span>
+        </div>
+        <ul class="qt-rates" id="rate-rows"><li class="qt-loading">Loading…</li></ul>
+      </section>
+
+    </aside>
+  </div>
+
+</div>
+</div>
+
+<script>
+const TD_KEY   = '0f57d90c0f8042b3b526a66545daaa62';
+
+function fmtPrice(n) {
+  n = parseFloat(n);
+  if (n >= 1000) return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  if (n >= 1)    return n.toFixed(2);
+  return n.toFixed(4);
+}
+
+function pctCell(p) {
+  p = parseFloat(p);
+  const cls = p >= 0 ? 'up' : 'dn', sign = p >= 0 ? '+' : '-';
+  return `<span class="${cls}">${sign}${Math.abs(p).toFixed(2)}%</span>`;
+}
+
+
+// Twelve Data free plan: 8 API credits/min, 1 credit per symbol per request.
+// Equities (8 symbols) and treasury indices (2 symbols) are split into separate
+// fetches so neither batch exceeds the per-minute credit limit.
+var _tdPromise = null;
+
+function _tdMakeCache(key, ttl) {
+  return {
+    get() {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return null;
+        const { ts, data } = JSON.parse(raw);
+        return Date.now() - ts > ttl ? null : data;
+      } catch { return null; }
+    },
+    set(data) {
+      try { localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data })); } catch {}
+    }
+  };
+}
+
+function _tdFetch(syms, cache) {
+  return fetch(`https://api.twelvedata.com/time_series?symbol=${syms}&interval=1day&outputsize=32&apikey=${TD_KEY}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.code || data.status === 'error') {
+        const cached = cache.get();
+        if (cached) return cached;
+        throw new Error(data.message || 'API error');
+      }
+      cache.set(data);
+      return data;
+    })
+    .catch(() => cache.get() || {});
+}
+
+const _tdEqCache = _tdMakeCache('mb_td_eq', 4 * 60 * 60 * 1000);
+function getTDData() {
+  if (_tdPromise) return _tdPromise;
+  _tdPromise = _tdFetch('GOOGL,AMZN,AAPL,SPCX,COIN,NVDA,QCOM,SPY', _tdEqCache);
+  return _tdPromise;
+}
+
+// Treasury + SOFR via Vercel proxy. No localStorage — Vercel CDN caches the function response.
+var _treasuryPromise = null;
+
+function getTreasuryData() {
+  if (!_treasuryPromise) {
+    _treasuryPromise = fetch('/api/treasury')
+      .then(r => r.json())
+      .catch(() => null);
+  }
+  return _treasuryPromise;
+}
+
+// EQUITIES
+async function loadEquities() {
+  const tbody = document.getElementById('eq-body');
+  try {
+    const data = await getTDData();
+    if (data.code) throw new Error(data.message);
+    const order = ['GOOGL','AMZN','AAPL','SPCX','COIN','NVDA','QCOM','SPY'];
+    tbody.innerHTML = order.map(sym => {
+      const d = data[sym];
+      if (!d || d.status === 'error' || !d.values?.length)
+        return `<tr><td class="qt-table__sym">${sym}</td><td class="r">—</td><td class="r">—</td><td class="r">—</td></tr>`;
+      const vals   = d.values;
+      const price  = parseFloat(vals[0].close);
+      const prev   = parseFloat(vals[1]?.close ?? vals[0].close);
+      const old30  = parseFloat(vals[vals.length - 1].close);
+      const chg1d  = ((price - prev)  / prev)  * 100;
+      const chg30d = ((price - old30) / old30) * 100;
+      return `<tr>
+        <td class="qt-table__sym">${sym}</td>
+        <td class="r">${pctCell(chg1d)}</td>
+        <td class="r">${pctCell(chg30d)}</td>
+        <td class="r qt-table__price">$${fmtPrice(price)}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="4" class="qt-err">Could not load equities.</td></tr>`;
+  }
+}
+
+// CRYPTO
+async function loadCrypto() {
+  const tbody = document.getElementById('crypto-body');
+  const coins = [
+    {id:'bitcoin',sym:'BTC'},{id:'ethereum',sym:'ETH'},{id:'solana',sym:'SOL'},
+    {id:'dogecoin',sym:'DOGE'},{id:'hyperliquid',sym:'HYPE'}
+  ];
+  try {
+    const ids = coins.map(c=>c.id).join(',');
+    const res  = await fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&price_change_percentage=1h,24h,30d`);
+    const data = await res.json();
+    const map  = {};
+    data.forEach(c => { map[c.id] = c; });
+    tbody.innerHTML = coins.map(({id,sym}) => {
+      const c = map[id]; if (!c) return '';
+      const h1  = c.price_change_percentage_1h_in_currency  ?? 0;
+      const h24 = c.price_change_percentage_24h_in_currency ?? 0;
+      const d30 = c.price_change_percentage_30d_in_currency ?? 0;
+      return `<tr>
+        <td class="qt-table__sym">${sym}</td>
+        <td class="r">${pctCell(h1)}</td>
+        <td class="r">${pctCell(h24)}</td>
+        <td class="r">${pctCell(d30)}</td>
+        <td class="r qt-table__price">$${fmtPrice(c.current_price)}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="5" class="qt-err">Could not load crypto.</td></tr>`;
+  }
+}
+
+// RATES — US Treasury XML feed for live values + 1D bps change
+async function loadRates() {
+  const rows = document.getElementById('rate-rows');
+  try {
+    const t = await getTreasuryData();
+    if (!t) throw new Error('no data');
+
+    function bps(cur, prev) {
+      if (cur == null || prev == null) return null;
+      return (cur - prev) * 100;
+    }
+
+    const rates = [
+      { label: '5Y Treasury',  val: t.y5,   chg: bps(t.y5,   t.y5Prev)   },
+      { label: '10Y Treasury', val: t.y10,  chg: bps(t.y10,  t.y10Prev)  },
+      { label: '30D Avg SOFR', val: t.sofr, chg: null },
+    ];
+
+    rows.innerHTML = rates.map(function({ label, val, chg }) {
+      if (val == null) return `<li><div class="qt-rates__lbl">${label}</div><div class="qt-rates__row"><span class="qt-rates__val">—</span></div></li>`;
+      const cls  = (chg == null || chg >= 0) ? 'up' : 'dn';
+      const sign = (chg != null && chg >= 0) ? '+' : '';
+      const chgHtml = chg != null
+        ? `<span class="qt-rates__d ${cls}">${sign}${chg.toFixed(1)}bps</span>`
+        : '';
+      return `<li>
+        <div class="qt-rates__lbl">${label}</div>
+        <div class="qt-rates__row">
+          <span class="qt-rates__val">${val.toFixed(2)}%</span>
+          ${chgHtml}
+        </div>
+      </li>`;
+    }).join('');
+
+  } catch(e) {
+    rows.innerHTML = '<li class="qt-err">Could not load rates.</li>';
+  }
+}
+
+
+
+
+// DAILY QUOTE — fixed for the day, seeded by date, Claude API generates it
+const QUOTES = [
+  { text: "The secret of getting things done is to act.", attr: "Dante Alighieri" },
+  { text: "The secret of all victory lies in the organisation of the non-obvious.", attr: "Marcus Aurelius" },
+  { text: "He who has a great deal to put into them will make a day have a hundred pockets.", attr: "Friedrich Nietzsche" },
+  { text: "A man's worth is no greater than his ambitions.", attr: "Marcus Aurelius" },
+  { text: "The greatest wealth is to live content with little.", attr: "Plato" },
+  { text: "It is not death that a man should fear, but he should fear never beginning to live.", attr: "Marcus Aurelius" },
+  { text: "Fortune favours the prepared mind.", attr: "Louis Pasteur" },
+  { text: "Doubt is the origin of wisdom.", attr: "René Descartes" },
+  { text: "The purpose of human life is to serve, and to show compassion and the will to help others.", attr: "Albert Schweitzer" },
+  { text: "The man who moves a mountain begins by carrying away small stones.", attr: "Confucius" },
+  { text: "A leader is a dealer in hope.", attr: "Napoleon Bonaparte" },
+  { text: "Impossible is a word found only in the dictionary of fools.", attr: "Napoleon Bonaparte" },
+  { text: "The truest wisdom is a resolute determination.", attr: "Napoleon Bonaparte" },
+  { text: "Never interrupt your enemy when he is making a mistake.", attr: "Napoleon Bonaparte" },
+  { text: "In politics, stupidity is not a handicap.", attr: "Napoleon Bonaparte" },
+  { text: "Courage is like love; it must have hope for nourishment.", attr: "Napoleon Bonaparte" },
+  { text: "A soldier will fight long and hard for a bit of colored ribbon.", attr: "Napoleon Bonaparte" },
+  { text: "The battlefield is a scene of constant chaos. The winner will be the one who controls that chaos, both his own and the enemy's.", attr: "Napoleon Bonaparte" },
+  { text: "Victory belongs to the most persevering.", attr: "Napoleon Bonaparte" },
+  { text: "If you want a thing done well, do it yourself.", attr: "Napoleon Bonaparte" },
+  { text: "I came, I saw, I conquered.", attr: "Julius Caesar" },
+  { text: "Experience is the teacher of all things.", attr: "Julius Caesar" },
+  { text: "It is easier to find men who will volunteer to die than to find those who are willing to endure pain with patience.", attr: "Julius Caesar" },
+  { text: "Which death is preferable to every other? The unexpected.", attr: "Julius Caesar" },
+  { text: "Men in general are quick to believe that which they wish to be true.", attr: "Julius Caesar" },
+  { text: "As a rule, men worry more about what they can't see than about what they can.", attr: "Julius Caesar" },
+  { text: "No one is so brave that he is not disturbed by something unexpected.", attr: "Julius Caesar" },
+  { text: "I love the name of honor more than I fear death.", attr: "Julius Caesar" },
+  { text: "The impediment to action advances action. What stands in the way becomes the way.", attr: "Marcus Aurelius" },
+  { text: "Waste no more time arguing about what a good man should be. Be one.", attr: "Marcus Aurelius" },
+  { text: "You have power over your mind, not outside events. Realize this, and you will find strength.", attr: "Marcus Aurelius" },
+  { text: "The best revenge is to be unlike him who performed the injury.", attr: "Marcus Aurelius" },
+  { text: "Accept the things to which fate binds you.", attr: "Marcus Aurelius" },
+  { text: "The first rule is to keep an untroubled spirit. The second is to look things in the face and know them for what they are.", attr: "Marcus Aurelius" },
+  { text: "If it is not right, do not do it; if it is not true, do not say it.", attr: "Marcus Aurelius" },
+  { text: "He who lives in harmony with himself lives in harmony with the universe.", attr: "Marcus Aurelius" },
+  { text: "Very little is needed to make a happy life; it is all within yourself, in your way of thinking.", attr: "Marcus Aurelius" },
+  { text: "The object of life is not to be on the side of the majority, but to escape finding oneself in the ranks of the insane.", attr: "Marcus Aurelius" },
+  { text: "Confine yourself to the present.", attr: "Marcus Aurelius" },
+  { text: "When you wake up in the morning, tell yourself: the people I deal with today will be meddling, ungrateful, arrogant, dishonest, jealous and surly.", attr: "Marcus Aurelius" },
+  { text: "Luck is what happens when preparation meets opportunity.", attr: "Seneca" },
+
+  { text: "It is not that I am brave, it is that those who are cowardly are the bravest. They carry the heaviest load.", attr: "Seneca" },
+  { text: "Revenge is not always sweet; once it is consummated we feel inferior to our victim.", attr: "Seneca" },
+  { text: "Begin at once to live, and count each separate day as a separate life.", attr: "Seneca" },
+  { text: "The whole future lies in uncertainty: live immediately.", attr: "Seneca" },
+  { text: "We suffer more in imagination than in reality.", attr: "Seneca" },
+  { text: "No person has the power to have everything they want, but it is in their power not to want what they don't have.", attr: "Seneca" },
+  { text: "It is not the man who has too little, but the man who craves more, that is poor.", attr: "Seneca" },
+  { text: "He who is brave is free.", attr: "Seneca" },
+  { text: "Every new beginning comes from some other beginning's end.", attr: "Seneca" },
+  { text: "We are what we repeatedly do. Excellence, then, is not an act, but a habit.", attr: "Aristotle" },
+  { text: "The more you know, the more you know you don't know.", attr: "Aristotle" },
+  { text: "Happiness depends upon ourselves.", attr: "Aristotle" },
+  { text: "It is during our darkest moments that we must focus to see the light.", attr: "Aristotle" },
+  { text: "Knowing yourself is the beginning of all wisdom.", attr: "Aristotle" },
+  { text: "The roots of education are bitter, but the fruit is sweet.", attr: "Aristotle" },
+  { text: "Quality is not an act; it is a habit.", attr: "Aristotle" },
+  { text: "Hope is a waking dream.", attr: "Aristotle" },
+  { text: "Those who know, do. Those that understand, teach.", attr: "Aristotle" },
+  { text: "The aim of the wise is not to secure pleasure, but to avoid pain.", attr: "Aristotle" },
+  { text: "Patience is bitter, but its fruit is sweet.", attr: "Aristotle" },
+  { text: "Man is by nature a social animal.", attr: "Aristotle" },
+  { text: "Opinion is the medium between knowledge and ignorance.", attr: "Plato" },
+  { text: "The measure of a man is what he does with power.", attr: "Plato" },
+  { text: "Courage is knowing what not to fear.", attr: "Plato" },
+  { text: "Excellence is not a gift, but a skill that takes practice.", attr: "Plato" },
+  { text: "At the touch of love, everyone becomes a poet.", attr: "Plato" },
+  { text: "The beginning is the most important part of the work.", attr: "Plato" },
+  { text: "Good people do not need laws to tell them to act responsibly, while bad people will find a way around the laws.", attr: "Plato" },
+  { text: "Be kind, for everyone you meet is fighting a hard battle.", attr: "Plato" },
+  { text: "Only the dead have seen the end of war.", attr: "Plato" },
+  { text: "The only true wisdom is in knowing you know nothing.", attr: "Socrates" },
+  { text: "An unexamined life is not worth living.", attr: "Socrates" },
+  { text: "To find yourself, think for yourself.", attr: "Socrates" },
+  { text: "Education is the kindling of a flame, not the filling of a vessel.", attr: "Socrates" },
+  { text: "The secret of happiness is not found in seeking more, but in developing the capacity to enjoy less.", attr: "Socrates" },
+  { text: "Strong minds discuss ideas, average minds discuss events, weak minds discuss people.", attr: "Socrates" },
+  { text: "He who is not contented with what he has, would not be contented with what he would like to have.", attr: "Socrates" },
+  { text: "By all means marry; if you get a good wife, you will be happy. If you get a bad one, you will be a philosopher.", attr: "Socrates" },
+  { text: "If you know the enemy and know yourself, you need not fear the result of a hundred battles.", attr: "Sun Tzu" },
+  { text: "Appear weak when you are strong, and strong when you are weak.", attr: "Sun Tzu" },
+  { text: "The supreme art of war is to subdue the enemy without fighting.", attr: "Sun Tzu" },
+  { text: "In the midst of chaos, there is also opportunity.", attr: "Sun Tzu" },
+  { text: "He who knows when he can fight and when he cannot will be victorious.", attr: "Sun Tzu" },
+  { text: "All warfare is based on deception.", attr: "Sun Tzu" },
+  { text: "Let your plans be dark and impenetrable as night, and when you move, fall like a thunderbolt.", attr: "Sun Tzu" },
+  { text: "The greatest victory is that which requires no battle.", attr: "Sun Tzu" },
+  { text: "Move swift as the wind and closely-formed as the wood. Attack like the fire and be still as the mountain.", attr: "Sun Tzu" },
+  { text: "Opportunities multiply as they are seized.", attr: "Sun Tzu" },
+  { text: "The man who moves a mountain begins by carrying away small stones.", attr: "Confucius" },
+  { text: "A man who has committed a mistake and doesn't correct it is committing another mistake.", attr: "Confucius" },
+  { text: "It does not matter how slowly you go as long as you do not stop.", attr: "Confucius" },
+  { text: "Real knowledge is to know the extent of one's ignorance.", attr: "Confucius" },
+  { text: "Choose a job you love, and you will never have to work a day in your life.", attr: "Confucius" },
+  { text: "Before you embark on a journey of revenge, dig two graves.", attr: "Confucius" },
+  { text: "Our greatest glory is not in never falling, but in rising every time we fall.", attr: "Confucius" },
+  { text: "He who learns but does not think is lost. He who thinks but does not learn is in great danger.", attr: "Confucius" },
+  { text: "When it is obvious that the goals cannot be reached, don't adjust the goals, adjust the action steps.", attr: "Confucius" },
+  { text: "Silence is a true friend who never betrays.", attr: "Confucius" },
+  { text: "The superior man is modest in his speech, but exceeds in his actions.", attr: "Confucius" },
+  { text: "In the middle of difficulty lies opportunity.", attr: "Julius Caesar" },
+  { text: "No great thing is created suddenly.", attr: "Epictetus" },
+  { text: "We are twice armed if we fight with faith.", attr: "Plato" },
+  { text: "An army of lions commanded by a deer will never be an army of lions.", attr: "Napoleon Bonaparte" },
+  { text: "First say to yourself what you would be; and then do what you have to do.", attr: "Epictetus" },
+  { text: "He who cannot be a good follower cannot be a good leader.", attr: "Aristotle" },
+  { text: "The pleasures of the intellect are permanent, the pleasures of the heart are transitory.", attr: "Mary Wollstonecraft" },
+  { text: "The key is not to prioritise what's on your schedule, but to schedule your priorities.", attr: "Otto von Bismarck" },
+  { text: "A prince who is not himself wise cannot be well advised.", attr: "Niccolò Machiavelli" },
+  { text: "There is only one good, knowledge, and one evil, ignorance.", attr: "Socrates" },
+  { text: "The chains of habit are too light to be felt until they are too heavy to be broken.", attr: "Samuel Johnson" },
+  { text: "Great works are performed not by strength but by perseverance.", attr: "Samuel Johnson" },
+  { text: "Integrity without knowledge is weak and useless, and knowledge without integrity is dangerous and dreadful.", attr: "Samuel Johnson" },
+  { text: "Curiosity is one of the permanent and certain characteristics of a vigorous intellect.", attr: "Samuel Johnson" },
+  { text: "We are all capable of evil thoughts, but only very rarely of evil deeds; we can all do good deeds, but very few of us can think good thoughts.", attr: "Cesare Pavese" },
+  { text: "The present moment always will have been.", attr: "Søren Kierkegaard" },
+  { text: "Life can only be understood backwards, but it must be lived forwards.", attr: "Søren Kierkegaard" },
+  { text: "The most common form of despair is not being who you are.", attr: "Søren Kierkegaard" },
+  { text: "To dare is to lose one's footing momentarily. Not to dare is to lose oneself.", attr: "Søren Kierkegaard" },
+  { text: "Success is not final, failure is not fatal: it is the courage to continue that counts.", attr: "Winston Churchill" },
+  { text: "To improve is to change; to be perfect is to have changed often.", attr: "Winston Churchill" },
+  { text: "Courage is what it takes to stand up and speak; courage is also what it takes to sit down and listen.", attr: "Winston Churchill" },
+  { text: "We make a living by what we get, but we make a life by what we give.", attr: "Winston Churchill" },
+  { text: "A pessimist sees the difficulty in every opportunity; an optimist sees the opportunity in every difficulty.", attr: "Winston Churchill" },
+  { text: "Success consists of going from failure to failure without loss of enthusiasm.", attr: "Winston Churchill" },
+  { text: "The price of greatness is responsibility.", attr: "Winston Churchill" },
+  { text: "You will never reach your destination if you stop and throw stones at every dog that barks.", attr: "Winston Churchill" },
+  { text: "If you're going through hell, keep going.", attr: "Winston Churchill" },
+  { text: "My tastes are simple: I am easily satisfied with the best.", attr: "Winston Churchill" },
+  { text: "Tact is the ability to tell someone to go to hell in such a way that they look forward to the trip.", attr: "Winston Churchill" },
+  { text: "History will be kind to me for I intend to write it.", attr: "Winston Churchill" },
+  { text: "He who has a why to live can bear almost any how.", attr: "Friedrich Nietzsche" },
+  { text: "That which does not kill us makes us stronger.", attr: "Friedrich Nietzsche" },
+  { text: "Without music, life would be a mistake.", attr: "Friedrich Nietzsche" },
+  { text: "It is not a lack of love, but a lack of friendship that makes unhappy marriages.", attr: "Friedrich Nietzsche" },
+  { text: "In individuals, insanity is rare; but in groups, parties, nations and epochs, it is the rule.", attr: "Friedrich Nietzsche" },
+  { text: "The higher we soar, the smaller we appear to those who cannot fly.", attr: "Friedrich Nietzsche" },
+  { text: "One must still have chaos in oneself to be able to give birth to a dancing star.", attr: "Friedrich Nietzsche" },
+  { text: "The secret for harvesting from existence the greatest fruitfulness and the greatest enjoyment is to live dangerously.", attr: "Friedrich Nietzsche" },
+  { text: "There are no facts, only interpretations.", attr: "Friedrich Nietzsche" },
+  { text: "All truly great thoughts are conceived while walking.", attr: "Friedrich Nietzsche" },
+  { text: "Whatever you can do or dream you can, begin it. Boldness has genius, power and magic in it.", attr: "Johann Wolfgang von Goethe" },
+  { text: "Knowing is not enough; we must apply. Willing is not enough; we must do.", attr: "Johann Wolfgang von Goethe" },
+  { text: "As soon as you trust yourself, you will know how to live.", attr: "Johann Wolfgang von Goethe" },
+  { text: "One ought, every day at least, to hear a little song, read a good poem, see a fine picture, and, if it were possible, to speak a few reasonable words.", attr: "Johann Wolfgang von Goethe" },
+  { text: "Difficulties increase the nearer we approach the goal.", attr: "Johann Wolfgang von Goethe" },
+  { text: "A man sees in the world what he carries in his heart.", attr: "Johann Wolfgang von Goethe" },
+  { text: "Magic is believing in yourself. If you can do that, you can make anything happen.", attr: "Johann Wolfgang von Goethe" },
+  { text: "The greatest thing in this world is not so much where we stand as in what direction we are moving.", attr: "Johann Wolfgang von Goethe" },
+  { text: "None are more hopelessly enslaved than those who falsely believe they are free.", attr: "Johann Wolfgang von Goethe" },
+  { text: "Treat people as if they were what they ought to be and you help them become what they are capable of being.", attr: "Johann Wolfgang von Goethe" },
+  { text: "Common sense is not so common.", attr: "Voltaire" },
+  { text: "Judge a man by his questions rather than his answers.", attr: "Voltaire" },
+  { text: "The more I read, the more I acquire, the more certain I am that I know nothing.", attr: "Voltaire" },
+  { text: "It is forbidden to kill; therefore all murderers are punished unless they kill in large numbers and to the sound of trumpets.", attr: "Voltaire" },
+  { text: "To learn who rules over you, simply find out who you are not allowed to criticize.", attr: "Voltaire" },
+  { text: "God is a comedian playing to an audience too afraid to laugh.", attr: "Voltaire" },
+  { text: "Every man is guilty of all the good he did not do.", attr: "Voltaire" },
+  { text: "It is not enough to conquer; one must know how to seduce.", attr: "Voltaire" },
+  { text: "Think for yourself and let others enjoy the privilege of doing so too.", attr: "Voltaire" },
+  { text: "The ends justify the means.", attr: "Niccolò Machiavelli" },
+  { text: "It is better to be feared than loved, if you cannot be both.", attr: "Niccolò Machiavelli" },
+  { text: "Never was anything great achieved without danger.", attr: "Niccolò Machiavelli" },
+  { text: "Where the willingness is great, the difficulties cannot be great.", attr: "Niccolò Machiavelli" },
+  { text: "The promise given was a necessity of the past: the word broken is a necessity of the present.", attr: "Niccolò Machiavelli" },
+  { text: "Men are driven by two principal impulses, either by love or by fear.", attr: "Niccolò Machiavelli" },
+  { text: "It is better to act and repent than not to act and regret.", attr: "Niccolò Machiavelli" },
+  { text: "The lion cannot protect himself from traps, and the fox cannot defend himself from wolves. One must be both a fox and a lion.", attr: "Niccolò Machiavelli" },
+  { text: "It is not the strongest of the species that survives, but the one most responsive to change.", attr: "Charles Darwin" },
+  { text: "A man who dares to waste one hour of time has not discovered the value of life.", attr: "Charles Darwin" },
+  { text: "I am not apt to follow blindly the lead of other men.", attr: "Charles Darwin" },
+  { text: "The highest possible stage in moral culture is when we recognise that we ought to control our thoughts.", attr: "Charles Darwin" },
+  { text: "If I have seen further it is by standing on the shoulders of giants.", attr: "Isaac Newton" },
+  { text: "What we know is a drop, what we don't know is an ocean.", attr: "Isaac Newton" },
+  { text: "Tact is the knack of making a point without making an enemy.", attr: "Isaac Newton" },
+  { text: "To every action there is always opposed an equal reaction.", attr: "Isaac Newton" },
+  { text: "Learning never exhausts the mind.", attr: "Leonardo da Vinci" },
+  { text: "Simplicity is the ultimate sophistication.", attr: "Leonardo da Vinci" },
+  { text: "It had long since come to my attention that people of accomplishment rarely sat back and let things happen to them.", attr: "Leonardo da Vinci" },
+  { text: "The noblest pleasure is the joy of understanding.", attr: "Leonardo da Vinci" },
+  { text: "Nothing strengthens authority so much as silence.", attr: "Leonardo da Vinci" },
+  { text: "I have been impressed with the urgency of doing. Knowing is not enough; we must apply.", attr: "Leonardo da Vinci" },
+  { text: "The greatest deception men suffer is from their own opinions.", attr: "Leonardo da Vinci" },
+  { text: "Where the spirit does not work with the hand, there is no art.", attr: "Leonardo da Vinci" },
+  { text: "As a well-spent day brings happy sleep, so a life well spent brings happy death.", attr: "Leonardo da Vinci" },
+  { text: "Study without desire spoils the memory, and it retains nothing that it takes in.", attr: "Leonardo da Vinci" },
+  { text: "The greater danger for most of us lies not in setting our aim too high and falling short, but in setting our aim too low and achieving our mark.", attr: "Michelangelo" },
+  { text: "Lord, grant that I may always desire more than I can accomplish.", attr: "Michelangelo" },
+  { text: "The marble not yet carved can hold the form of every thought the greatest artist has.", attr: "Michelangelo" },
+  { text: "If people knew how hard I worked to get my mastery, it wouldn't seem so wonderful at all.", attr: "Michelangelo" },
+  { text: "A man paints with his brains and not with his hands.", attr: "Michelangelo" },
+  { text: "I saw the angel in the marble and carved until I set him free.", attr: "Michelangelo" },
+  { text: "The greatest thing in the world is to know how to belong to oneself.", attr: "Michel de Montaigne" },
+  { text: "On the highest throne in the world, we still sit only on our own bottom.", attr: "Michel de Montaigne" },
+  { text: "Every man carries the full form of the human condition within him.", attr: "Michel de Montaigne" },
+  { text: "The most certain sign of wisdom is cheerfulness.", attr: "Michel de Montaigne" },
+  { text: "Nothing is so firmly believed as that which we least know.", attr: "Michel de Montaigne" },
+  { text: "Knowledge is power.", attr: "Francis Bacon" },
+  { text: "A wise man will make more opportunities than he finds.", attr: "Francis Bacon" },
+  { text: "Read not to contradict and confute, nor to believe and take for granted, but to weigh and consider.", attr: "Francis Bacon" },
+  { text: "The remedy is worse than the disease.", attr: "Francis Bacon" },
+  { text: "Wonder is the seed of knowledge.", attr: "Francis Bacon" },
+  { text: "In order for the light to shine so brightly, the darkness must be present.", attr: "Francis Bacon" },
+  { text: "Prosperity is not without many fears and distastes; and adversity is not without comforts and hopes.", attr: "Francis Bacon" },
+  { text: "I think, therefore I am.", attr: "René Descartes" },
+  { text: "The reading of all good books is like a conversation with the finest men of past centuries.", attr: "René Descartes" },
+  { text: "Divide each difficulty into as many parts as is feasible and necessary to resolve it.", attr: "René Descartes" },
+  { text: "It is not enough to have a good mind. The main thing is to use it well.", attr: "René Descartes" },
+  { text: "Everyone thinks of changing the world, but no one thinks of changing himself.", attr: "Leo Tolstoy" },
+  { text: "All great literature is one of two stories; a man goes on a journey or a stranger comes to town.", attr: "Leo Tolstoy" },
+  { text: "The two most powerful warriors are patience and time.", attr: "Leo Tolstoy" },
+  { text: "Happy families are all alike; every unhappy family is unhappy in its own way.", attr: "Leo Tolstoy" },
+  { text: "If you want to be happy, be.", attr: "Leo Tolstoy" },
+  { text: "The sole meaning of life is to serve humanity.", attr: "Leo Tolstoy" },
+  { text: "War is so unjust and ugly that all who wage it must try to stifle the voice of conscience within themselves.", attr: "Leo Tolstoy" },
+  { text: "The soul is healed by being with children.", attr: "Fyodor Dostoyevsky" },
+  { text: "Pain and suffering are always inevitable for a large intelligence and a deep heart.", attr: "Fyodor Dostoyevsky" },
+  { text: "To love someone means to see them as God intended them.", attr: "Fyodor Dostoyevsky" },
+  { text: "The man who lies to himself and listens to his own lie comes to a point that he cannot distinguish the truth within him.", attr: "Fyodor Dostoyevsky" },
+  { text: "Beauty will save the world.", attr: "Fyodor Dostoyevsky" },
+  { text: "It takes something more than intelligence to act intelligently.", attr: "Fyodor Dostoyevsky" },
+  { text: "Whoever fights monsters should see to it that in the process he does not become a monster.", attr: "Friedrich Nietzsche" },
+  { text: "A man who does not think for himself does not think at all.", attr: "Oscar Wilde" },
+  { text: "To define is to limit.", attr: "Oscar Wilde" },
+  { text: "We are all in the gutter, but some of us are looking at the stars.", attr: "Oscar Wilde" },
+  { text: "Experience is simply the name we give our mistakes.", attr: "Oscar Wilde" },
+  { text: "The truth is rarely pure and never simple.", attr: "Oscar Wilde" },
+  { text: "All of humanity's problems stem from man's inability to sit quietly in a room alone.", attr: "Blaise Pascal" },
+  { text: "The heart has its reasons which reason knows not.", attr: "Blaise Pascal" },
+  { text: "Kind words do not cost much. Yet they accomplish much.", attr: "Blaise Pascal" },
+  { text: "In faith there is enough light for those who want to believe and enough shadows to blind those who don't.", attr: "Blaise Pascal" },
+  { text: "We are generally the better persuaded by the reasons we discover ourselves than by those given to us by others.", attr: "Blaise Pascal" },
+  { text: "Talent hits a target no one else can hit. Genius hits a target no one else can see.", attr: "Arthur Schopenhauer" },
+  { text: "The more unintelligent a man is, the less mysterious existence seems to him.", attr: "Arthur Schopenhauer" },
+  { text: "We forfeit three-fourths of ourselves in order to be like other people.", attr: "Arthur Schopenhauer" },
+  { text: "Compassion is the basis of morality.", attr: "Arthur Schopenhauer" },
+  { text: "A man can do what he wants, but not want what he wants.", attr: "Arthur Schopenhauer" },
+  { text: "Nothing great in the world was accomplished without passion.", attr: "Georg Wilhelm Friedrich Hegel" },
+  { text: "We learn from history that we do not learn from history.", attr: "Georg Wilhelm Friedrich Hegel" },
+  { text: "The truth is the whole.", attr: "Georg Wilhelm Friedrich Hegel" },
+  { text: "Only one man ever understood me, and he didn't understand me.", attr: "Georg Wilhelm Friedrich Hegel" },
+  { text: "Act only according to that maxim whereby you can at the same time will that it should become a universal law.", attr: "Immanuel Kant" },
+  { text: "We are not rich by what we possess but by what we can do without.", attr: "Immanuel Kant" },
+  { text: "Science is organized knowledge. Wisdom is organized life.", attr: "Immanuel Kant" },
+  { text: "Morality is not the doctrine of how we may make ourselves happy, but how we may make ourselves worthy of happiness.", attr: "Immanuel Kant" },
+  { text: "Two things awe me most: the starry sky above me and the moral law within me.", attr: "Immanuel Kant" },
+  { text: "Politics is the art of the possible, the attainable — the art of the next best.", attr: "Otto von Bismarck" },
+  { text: "Laws are like sausages — it is best not to see them being made.", attr: "Otto von Bismarck" },
+  { text: "The secret of politics? Make a good treaty with Russia.", attr: "Otto von Bismarck" },
+  { text: "A statesman must wait until he hears the steps of God sounding through events, then leap up and grasp the hem of His garment.", attr: "Otto von Bismarck" },
+  { text: "The whole art of war consists in getting at what is on the other side of the hill.", attr: "Duke of Wellington" },
+  { text: "Educate men without religion and you make them but clever devils.", attr: "Duke of Wellington" },
+  { text: "There is no such thing as a little country. The greatness of a people is no more determined by their number than the greatness of a man is determined by his height.", attr: "Duke of Wellington" },
+  { text: "I am not an adventurer by choice but by fate.", attr: "Vincent van Gogh" },
+  { text: "Great things are done by a series of small things brought together.", attr: "Vincent van Gogh" },
+  { text: "What would life be if we had no courage to attempt anything?", attr: "Vincent van Gogh" },
+  { text: "I feel that there is nothing more truly artistic than to love people.", attr: "Vincent van Gogh" },
+  { text: "Normality is a paved road: it is comfortable to walk, but no flowers grow.", attr: "Vincent van Gogh" },
+  { text: "The fishermen know that the sea is dangerous and the storm terrible, but they have never found these dangers sufficient reason for remaining ashore.", attr: "Vincent van Gogh" },
+  { text: "Don't tell me the moon is shining; show me the glint of light on broken glass.", attr: "Anton Chekhov" },
+  { text: "Any idiot can face a crisis — it's this day-to-day living that wears you out.", attr: "Anton Chekhov" },
+  { text: "Knowledge is of no value unless you put it into practice.", attr: "Anton Chekhov" },
+  { text: "We shall find peace. We shall hear angels. We shall see the sky sparkling with diamonds.", attr: "Anton Chekhov" },
+  { text: "A thousand words leave not the same deep impression as does a single deed.", attr: "Henrik Ibsen" },
+  { text: "The strongest man in the world is he who stands most alone.", attr: "Henrik Ibsen" },
+  { text: "Never wear your best trousers when you go out to fight for freedom and truth.", attr: "Henrik Ibsen" },
+  { text: "A person may cause evil to others not only by his actions but by his inaction, and in either case he is justly accountable to them for the injury.", attr: "John Stuart Mill" },
+  { text: "He who knows only his own side of the case knows little of that.", attr: "John Stuart Mill" },
+  { text: "The only freedom which deserves the name is that of pursuing our own good in our own way.", attr: "John Stuart Mill" },
+  { text: "The only thing necessary for the triumph of evil is for good men to do nothing.", attr: "Edmund Burke" },
+  { text: "Those who don't know history are doomed to repeat it.", attr: "Edmund Burke" },
+  { text: "No passion so effectually robs the mind of all its powers of acting and reasoning as fear.", attr: "Edmund Burke" },
+  { text: "Our patience will achieve more than our force.", attr: "Edmund Burke" },
+  { text: "The real tragedy of the poor is the poverty of their aspirations.", attr: "Adam Smith" },
+  { text: "No society can surely be flourishing and happy, of which the far greater part of the members are poor and miserable.", attr: "Adam Smith" },
+  { text: "Science is the great antidote to the poison of enthusiasm and superstition.", attr: "Adam Smith" },
+  { text: "The mind is furnished with ideas by experience alone.", attr: "John Locke" },
+  { text: "No man's knowledge here can go beyond his experience.", attr: "John Locke" },
+  { text: "Education begins the gentleman, but reading, good company and reflection must finish him.", attr: "John Locke" },
+  { text: "A wise man proportions his belief to the evidence.", attr: "David Hume" },
+  { text: "The beauty of things exists in the mind which contemplates them.", attr: "David Hume" },
+  { text: "Reason is, and ought only to be the slave of the passions.", attr: "David Hume" },
+  { text: "Man is born free, and everywhere he is in chains.", attr: "Jean-Jacques Rousseau" },
+  { text: "Patience is bitter, but its fruit is sweet.", attr: "Jean-Jacques Rousseau" },
+  { text: "The world of reality has its limits; the world of imagination is boundless.", attr: "Jean-Jacques Rousseau" },
+  { text: "The secret of all effective originality in advertising is not the creation of new and tricky words and pictures, but one of putting familiar words and pictures into new relationships.", attr: "Leo Burnett" },
+  { text: "In all things it is better to hope than to despair.", attr: "Johann Wolfgang von Goethe" },
+  { text: "A man of genius makes no mistakes. His errors are volitional and are the portals of discovery.", attr: "James Joyce" },
+  { text: "Silence is the sleep that nourishes wisdom.", attr: "Francis Bacon" },
+  { text: "The most courageous act is still to think for yourself. Aloud.", attr: "Coco Chanel" },
+  { text: "Fashion fades, only style remains the same.", attr: "Coco Chanel" },
+  { text: "I don't do fashion, I am fashion.", attr: "Coco Chanel" },
+  { text: "Where there is no imagination there is no horror.", attr: "Arthur Conan Doyle" },
+  { text: "When you have eliminated the impossible, whatever remains, however improbable, must be the truth.", attr: "Arthur Conan Doyle" },
+  { text: "It is a capital mistake to theorise before one has data.", attr: "Arthur Conan Doyle" },
+  { text: "Never stand begging for that which you have the power to earn.", attr: "Miguel de Cervantes" },
+  { text: "The truth may be stretched thin, but it never breaks, and it always surfaces above lies, as oil floats on water.", attr: "Miguel de Cervantes" },
+  { text: "A closed mouth catches no flies.", attr: "Miguel de Cervantes" },
+  { text: "This above all: to thine own self be true.", attr: "William Shakespeare" },
+  { text: "We know what we are, but know not what we may be.", attr: "William Shakespeare" },
+  { text: "The course of true love never did run smooth.", attr: "William Shakespeare" },
+  { text: "What's in a name? That which we call a rose by any other name would smell as sweet.", attr: "William Shakespeare" },
+  { text: "All the world's a stage, and all the men and women merely players.", attr: "William Shakespeare" },
+  { text: "To be, or not to be, that is the question.", attr: "William Shakespeare" },
+  { text: "Nothing either good or bad, but thinking makes it so.", attr: "William Shakespeare" },
+  { text: "The lady doth protest too much, methinks.", attr: "William Shakespeare" },
+  { text: "Brevity is the soul of wit.", attr: "William Shakespeare" },
+  { text: "Behind every great fortune there is a crime.", attr: "Honoré de Balzac" },
+  { text: "Nothing is a greater impediment to being on good terms with others than being ill at ease with yourself.", attr: "Honoré de Balzac" },
+  { text: "The more one judges, the less one loves.", attr: "Honoré de Balzac" },
+  { text: "Be regular and orderly in your life so that you may be violent and original in your work.", attr: "Gustave Flaubert" },
+  { text: "The art of writing is the art of discovering what you believe.", attr: "Gustave Flaubert" },
+  { text: "Travel makes one modest. You see what a tiny place you occupy in the world.", attr: "Gustave Flaubert" },
+  { text: "Even the darkest night will end and the sun will rise.", attr: "Victor Hugo" },
+  { text: "He who opens a school door, closes a prison.", attr: "Victor Hugo" },
+  { text: "To love another person is to see the face of God.", attr: "Victor Hugo" },
+  { text: "Life is a flower of which love is the honey.", attr: "Victor Hugo" },
+  { text: "It was the best of times, it was the worst of times.", attr: "Charles Dickens" },
+  { text: "No one is useless in this world who lightens the burdens of another.", attr: "Charles Dickens" },
+  { text: "There is nothing in the world so irresistibly contagious as laughter and good humor.", attr: "Charles Dickens" },
+  { text: "I have great hopes that we shall love each other all our lives as much as if we had never married at all.", attr: "Lord Byron" },
+  { text: "The busy have no time for tears.", attr: "Lord Byron" },
+  { text: "Those who will not reason are bigots, those who cannot are fools, and those who dare not are slaves.", attr: "Lord Byron" },
+  { text: "Beauty is truth, truth beauty — that is all ye know on earth, and all ye need to know.", attr: "John Keats" },
+  { text: "Do not be discouraged by the difficulty of keeping yourself up to the mark.", attr: "John Keats" },
+  { text: "Dare to know; have the courage to use your own understanding.", attr: "Percy Bysshe Shelley" },
+  { text: "Rise like lions after slumber, in unvanquishable number.", attr: "Percy Bysshe Shelley" },
+  { text: "Fill your paper with the breathings of your heart.", attr: "William Wordsworth" },
+  { text: "The best portion of a good man's life is his little, nameless, unremembered acts of kindness and of love.", attr: "William Wordsworth" },
+  { text: "To err is human, to forgive divine.", attr: "Alexander Pope" },
+  { text: "A little learning is a dangerous thing.", attr: "Alexander Pope" },
+  { text: "Blessed is the man who expects nothing, for he shall never be disappointed.", attr: "Alexander Pope" },
+  { text: "May you live all the days of your life.", attr: "Jonathan Swift" },
+  { text: "Vision is the art of seeing what is invisible to others.", attr: "Jonathan Swift" },
+  { text: "Argument is the worst sort of conversation.", attr: "Jonathan Swift" },
+  { text: "The condition of man is a condition of war of everyone against everyone.", attr: "Thomas Hobbes" },
+  { text: "A man's conscience and his judgment is the same thing.", attr: "Thomas Hobbes" },
+  { text: "Peace is not the absence of war; it is a virtue, a state of mind, a disposition for benevolence, confidence, justice.", attr: "Baruch Spinoza" },
+  { text: "The highest activity a human being can attain is learning for understanding, because to understand is to be free.", attr: "Baruch Spinoza" },
+  { text: "Music is the pleasure the human mind experiences from counting without being aware that it is counting.", attr: "Gottfried Wilhelm Leibniz" },
+  { text: "The art of discovering the causes of phenomena and of explaining them is the goal of natural philosophy.", attr: "Gottfried Wilhelm Leibniz" },
+  { text: "To know that we know what we know, and to know that we do not know what we do not know, that is true knowledge.", attr: "Nicolaus Copernicus" },
+  { text: "You cannot teach a man anything; you can only help him find it within himself.", attr: "Galileo Galilei" },
+  { text: "All truths are easy to understand once they are discovered; the point is to discover them.", attr: "Galileo Galilei" },
+  { text: "Measure what is measurable, and make measurable what is not so.", attr: "Galileo Galilei" },
+  { text: "There is nothing impossible to him who will try.", attr: "Alexander the Great" },
+  { text: "I am not afraid of an army of lions led by a sheep; I am afraid of an army of sheep led by a lion.", attr: "Alexander the Great" },
+  { text: "I will either find a way or make one.", attr: "Hannibal Barca" },
+  { text: "A room without books is like a body without a soul.", attr: "Marcus Tullius Cicero" },
+  { text: "If you have a garden and a library, you have everything you need.", attr: "Marcus Tullius Cicero" },
+  { text: "The greater the difficulty, the greater the glory.", attr: "Marcus Tullius Cicero" },
+  { text: "Any man can make mistakes, but only an idiot persists in his error.", attr: "Marcus Tullius Cicero" },
+  { text: "Nothing is more unreliable than the populace, nothing more obscure than human intentions.", attr: "Marcus Tullius Cicero" },
+];
+
+function loadQuote() {
+  var now = new Date();
+  var start = new Date(now.getFullYear(), 0, 0);
+  var dayOfYear = Math.floor((now - start) / 86400000);
+  var idx = (dayOfYear - 1) % QUOTES.length;
+  var q = QUOTES[idx];
+  document.getElementById('quote-text').textContent = q.text;
+  document.getElementById('quote-attr').textContent = '— ' + q.attr;
+}
+
+
+
+
 function renderArch(data) {
   var el = document.getElementById('arch-content');
   var figHtml = '';
@@ -19,7 +812,7 @@ function renderArch(data) {
     '<div class="qt-feature__meta"><span>' + data.architect + '</span></div>' +
     '<p class="qt-feature__body">' + data.desc + '</p>' +
     '<a class="qt-btn" href="' + data.link + '" target="_blank" rel="noopener">' +
-      'Read on ArchDaily <span class="qt-btn__arr">↗</span>' +
+      'Read on ArchDaily <span class="qt-btn__arr">\u2197</span>' +
     '</a>';
 }
 
@@ -41,11 +834,11 @@ async function loadArch() {
     var tmp = document.createElement('div');
     tmp.innerHTML = item.description || '';
     var desc = (tmp.textContent || tmp.innerText || '').trim().replace(/\s+/g, ' ');
-    if (desc.length > 500) desc = desc.substring(0, 500).replace(/\s\S+$/, '') + '…';
+    if (desc.length > 500) desc = desc.substring(0, 500).replace(/\s\S+$/, '') + '\u2026';
     renderArch({ name: buildingName, architect: architect, imgUrl: imgUrl, desc: desc, link: item.link });
   } catch(e) {
     el.innerHTML = '<div class="qt-sechead"><h2 class="qt-sechead__t">Daily Architecture Digest</h2></div>' +
-      "<p class='qt-feature__loading'>Could not load today’s building.</p>";
+      "<p class='qt-feature__loading'>Could not load today\'s building.</p>";
   }
 }
 
